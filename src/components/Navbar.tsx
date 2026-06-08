@@ -7,6 +7,7 @@ export function Navbar({ profile }: { profile: Profile }) {
     ? [
         { href: "/admin", label: "대시보드" },
         { href: "/admin/categories", label: "수수료" },
+        { href: "/admin/product-costs", label: "원가" },
         { href: "/admin/reps", label: "담당자" },
         { href: "/admin/upload", label: "매출 업로드" },
         { href: "/admin/sales", label: "매출/수금" },

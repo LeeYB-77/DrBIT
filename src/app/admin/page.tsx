@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const CARDS = [
   { href: "/admin/categories", title: "수수료 카테고리", desc: "프로그램(P) / 상품(M,H,S) 수수료율" },
+  { href: "/admin/product-costs", title: "상품 원가", desc: "상품 품번별 원가 (수익 계산용)" },
   { href: "/admin/reps", title: "담당자 관리", desc: "담당자 등록 / 활성·비활성" },
   { href: "/admin/upload", title: "매출 엑셀 업로드", desc: "매출현황.xlsx 업로드 + 미리보기" },
   { href: "/admin/sales", title: "매출/수금 관리", desc: "매출 한 건씩 수금 체크" },
