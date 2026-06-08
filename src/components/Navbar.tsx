@@ -32,12 +32,16 @@ export function Navbar({ profile }: { profile: Profile }) {
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <span className="text-gray-600">
+          <Link
+            href="/me/account"
+            className="text-gray-600 hover:text-blue-600"
+            title="내 정보 / 비밀번호 변경"
+          >
             {profile.name}{" "}
             <span className="text-xs text-gray-400">
               ({isAdmin ? "관리자" : "담당자"})
             </span>
-          </span>
+          </Link>
           <form action="/auth/logout" method="post">
             <button
               type="submit"
