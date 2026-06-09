@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toggleRepActive, updateRepName, updateRepRole } from "./actions";
+import {
+  deleteRep,
+  toggleRepActive,
+  updateRepName,
+  updateRepRole,
+} from "./actions";
 
 type Rep = {
   id: string;
@@ -29,7 +34,8 @@ export function RepsTable({ reps }: { reps: Rep[] }) {
             <th className="px-4 py-3">이름 (엑셀 매칭 키)</th>
             <th className="px-4 py-3">이메일</th>
             <th className="px-4 py-3 w-32">역할</th>
-            <th className="px-4 py-3 w-32">상태</th>
+            <th className="px-4 py-3 w-24">상태</th>
+            <th className="px-4 py-3 w-20">삭제</th>
           </tr>
         </thead>
         <tbody className="divide-y">
@@ -76,6 +82,20 @@ function RepRow({ rep }: { rep: Rep }) {
     });
   }
 
+  function onDelete() {
+    if (
+      !window.confirm(
+        `${rep.name}님의 계정을 완전히 삭제하시겠어요?\n\n매출/정산 이력이 있으면 거부됩니다. 그 경우 '비활성' 토글을 사용하세요.`,
+      )
+    )
+      return;
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteRep(rep.id);
+      if (!result.ok) setError(result.error);
+    });
+  }
+
   return (
     <tr className={pending ? "opacity-50" : ""}>
       <td className="px-4 py-2">
@@ -110,6 +130,16 @@ function RepRow({ rep }: { rep: Rep }) {
           }`}
         >
           {rep.active ? "활성" : "비활성"}
+        </button>
+      </td>
+      <td className="px-4 py-2">
+        <button
+          onClick={onDelete}
+          disabled={pending}
+          className="rounded-md border border-red-300 bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+          title="auth.users + profiles 완전 삭제. 매출/정산 이력 있으면 거부됨."
+        >
+          삭제
         </button>
       </td>
     </tr>

@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { formatKRW } from "@/lib/fmt";
+import { formatKRW, formatPct, parsePct } from "@/lib/fmt";
 import {
   createOrUpdateCost,
   deleteCost,
   updateCost,
   updateCostName,
+  updateCostOverride,
   uploadCosts,
   type UploadConflict,
 } from "./actions";
@@ -16,6 +17,7 @@ export type Cost = {
   product_code: string;
   product_name: string | null;
   cost: number;
+  commission_rate_override: number | null;
   active: boolean;
   updated_at: string | null;
 };
@@ -50,6 +52,7 @@ export function ProductCostsClient({
   const [draftCode, setDraftCode] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftCost, setDraftCost] = useState("");
+  const [draftOverride, setDraftOverride] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function notice(msg: string) {
@@ -61,11 +64,17 @@ export function ProductCostsClient({
     setError(null);
     setSuccess(null);
     const cost = Number(draftCost.replaceAll(",", ""));
+    const override = draftOverride.trim() === "" ? null : parsePct(draftOverride);
+    if (draftOverride.trim() !== "" && (override === null || override < 0 || override > 1)) {
+      setError("별도 수수료율은 0~100% 사이여야 합니다.");
+      return;
+    }
     startTransition(async () => {
       const r = await createOrUpdateCost({
         product_code: draftCode,
         product_name: draftName || undefined,
         cost,
+        commission_rate_override: override,
       });
       if (!r.ok) setError(r.error);
       else {
@@ -73,6 +82,7 @@ export function ProductCostsClient({
         setDraftCode("");
         setDraftName("");
         setDraftCost("");
+        setDraftOverride("");
       }
     });
   }
@@ -120,7 +130,7 @@ export function ProductCostsClient({
       {/* 1. 수동 등록 / 빠른 입력 */}
       <section className="rounded-lg border bg-white p-4 space-y-3">
         <div className="text-sm font-medium">새 원가 등록 / 수정</div>
-        <div className="grid gap-3 sm:grid-cols-[1fr_2fr_1fr_auto]">
+        <div className="grid gap-3 sm:grid-cols-[1fr_2fr_1fr_1fr_auto]">
           <input
             value={draftCode}
             onChange={(e) => setDraftCode(e.target.value)}
@@ -137,7 +147,13 @@ export function ProductCostsClient({
             id="draft-cost"
             value={draftCost}
             onChange={(e) => setDraftCost(e.target.value)}
-            placeholder="원가 (예: 500000)"
+            placeholder="원가"
+            className="rounded-md border px-3 py-2 text-sm text-right outline-none focus:border-blue-500"
+          />
+          <input
+            value={draftOverride}
+            onChange={(e) => setDraftOverride(e.target.value)}
+            placeholder="별도 수수료율(선택)"
             className="rounded-md border px-3 py-2 text-sm text-right outline-none focus:border-blue-500"
           />
           <button
@@ -149,7 +165,8 @@ export function ProductCostsClient({
           </button>
         </div>
         <div className="text-xs text-gray-500">
-          같은 품번이 이미 있으면 원가가 업데이트됩니다.
+          별도 수수료율을 입력하면 카테고리율 대신 이 값이 적용됩니다 (예:{" "}
+          <code>15</code> 또는 <code>15%</code>). 비우면 카테고리율 사용.
         </div>
       </section>
 
@@ -318,6 +335,7 @@ export function ProductCostsClient({
                   <th className="px-3 py-2">품번</th>
                   <th className="px-3 py-2">품명</th>
                   <th className="px-3 py-2 text-right w-40">원가</th>
+                  <th className="px-3 py-2 text-right w-40">별도 수수료율</th>
                   <th className="px-3 py-2 w-20">삭제</th>
                 </tr>
               </thead>
@@ -341,6 +359,11 @@ export function ProductCostsClient({
 function CostRow({ cost }: { cost: Cost }) {
   const [name, setName] = useState(cost.product_name ?? "");
   const [costInput, setCostInput] = useState(formatKRW(cost.cost));
+  const [overrideInput, setOverrideInput] = useState(
+    cost.commission_rate_override === null
+      ? ""
+      : formatPct(cost.commission_rate_override),
+  );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -370,6 +393,23 @@ function CostRow({ cost }: { cost: Cost }) {
     });
   }
 
+  function saveOverride() {
+    const trimmed = overrideInput.trim();
+    const newVal = trimmed === "" ? null : parsePct(trimmed);
+    if (newVal === cost.commission_rate_override) return;
+    startTransition(async () => {
+      const r = await updateCostOverride(cost.id, trimmed || null);
+      if (!r.ok) {
+        setError(r.error);
+        setOverrideInput(
+          cost.commission_rate_override === null
+            ? ""
+            : formatPct(cost.commission_rate_override),
+        );
+      }
+    });
+  }
+
   function onDelete() {
     if (!window.confirm(`${cost.product_code} 원가를 삭제하시겠어요?`)) return;
     startTransition(async () => {
@@ -377,6 +417,8 @@ function CostRow({ cost }: { cost: Cost }) {
       if (!r.ok) setError(r.error);
     });
   }
+
+  const hasOverride = cost.commission_rate_override !== null;
 
   return (
     <tr className={pending ? "opacity-50" : ""}>
@@ -396,6 +438,22 @@ function CostRow({ cost }: { cost: Cost }) {
           onChange={(e) => setCostInput(e.target.value)}
           onBlur={saveCost}
           className="w-32 rounded-md border border-transparent px-2 py-1 text-right hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+        />
+      </td>
+      <td className="px-3 py-2 text-right">
+        <input
+          value={overrideInput}
+          onChange={(e) => setOverrideInput(e.target.value)}
+          onBlur={saveOverride}
+          placeholder="(카테고리율)"
+          className={`w-32 rounded-md border border-transparent px-2 py-1 text-right hover:border-gray-300 focus:border-blue-500 focus:outline-none ${
+            hasOverride ? "font-semibold text-purple-700" : "text-gray-400"
+          }`}
+          title={
+            hasOverride
+              ? "별도 수수료율 적용 중"
+              : "비어있으면 카테고리율 사용"
+          }
         />
       </td>
       <td className="px-3 py-2">

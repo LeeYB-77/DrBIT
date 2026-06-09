@@ -16,7 +16,9 @@ export default async function ProductCostsPage() {
   const [costsRes, salesRes] = await Promise.all([
     supabase
       .from("product_costs")
-      .select("id, product_code, product_name, cost, active, updated_at")
+      .select(
+        "id, product_code, product_name, cost, commission_rate_override, active, updated_at",
+      )
       .order("product_code"),
     supabase
       .from("sales")
@@ -35,6 +37,10 @@ export default async function ProductCostsPage() {
     product_code: c.product_code,
     product_name: c.product_name,
     cost: Number(c.cost),
+    commission_rate_override:
+      c.commission_rate_override === null
+        ? null
+        : Number(c.commission_rate_override),
     active: c.active,
     updated_at: c.updated_at,
   }));
@@ -78,9 +84,9 @@ export default async function ProductCostsPage() {
       <div>
         <h1 className="text-2xl font-bold">상품 원가 관리</h1>
         <p className="mt-1 text-sm text-gray-500">
-          상품(M·H·S 시작) 품번의 단위당 원가를 관리합니다. 미정산 매출의 수수료는{" "}
-          <b>(공급가 − 원가) × 수수료율</b>로 자동 재계산됩니다. 프로그램(P)은 원가
-          영향 없음.
+          상품(M·H·S 시작) 품번의 단위당 원가를 관리합니다. <b>(공급가 − 원가) × 수수료율</b>로
+          자동 재계산. 프로그램(P)은 원가 영향 없음. <b>별도 수수료율</b>을 입력하면
+          카테고리율 대신 그 값이 우선 적용됩니다.
         </p>
       </div>
 

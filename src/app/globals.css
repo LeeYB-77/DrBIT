@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: only light;
   --background: #ffffff;
   --foreground: #171717;
+}
+
+html {
+  color-scheme: only light;
+  background-color: #f9fafb;
+  color: #111827;
 }
 
 @theme inline {
@@ -12,15 +19,15 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: #f9fafb;
+  color: #111827;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* 입력 필드 자동완성도 라이트 색상 강제 (브라우저 자동 다크 처리 방지) */
+input,
+select,
+textarea {
+  color-scheme: only light;
 }

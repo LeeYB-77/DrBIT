@@ -136,3 +136,55 @@ export async function updateRepRole(
   revalidatePath("/admin/reps");
   return { ok: true };
 }
+
+export type DeleteRepResult =
+  | { ok: true }
+  | { ok: false; error: string; details?: { sales: number; settlements: number } };
+
+/**
+ * 담당자 계정 완전 삭제.
+ * - 본인 삭제 차단
+ * - 매출/정산 이력 있으면 거부 (비활성화 사용 안내)
+ * - 가능하면 auth.users 삭제 → profiles CASCADE 자동 삭제
+ */
+export async function deleteRep(id: string): Promise<DeleteRepResult> {
+  const profile = await requireAdmin();
+
+  if (id === profile.id) {
+    return { ok: false, error: "본인 계정은 삭제할 수 없습니다." };
+  }
+
+  const supabase = await createClient();
+  const adminCli = createAdminClient();
+
+  // 매출 이력 확인
+  const { count: salesCount, error: salesErr } = await supabase
+    .from("sales")
+    .select("id", { count: "exact", head: true })
+    .eq("rep_id", id);
+  if (salesErr) return { ok: false, error: salesErr.message };
+
+  // 정산 이력 확인
+  const { count: setCount, error: setErr } = await supabase
+    .from("settlements")
+    .select("id", { count: "exact", head: true })
+    .eq("rep_id", id);
+  if (setErr) return { ok: false, error: setErr.message };
+
+  if ((salesCount ?? 0) > 0 || (setCount ?? 0) > 0) {
+    return {
+      ok: false,
+      error:
+        `이 담당자의 매출 ${salesCount ?? 0}건, 정산 이력 ${setCount ?? 0}건이 있어 삭제할 수 없습니다. ` +
+        `대신 '활성' 토글을 꺼서 비활성화하세요.`,
+      details: { sales: salesCount ?? 0, settlements: setCount ?? 0 },
+    };
+  }
+
+  // Auth 사용자 삭제 → profiles는 CASCADE
+  const { error: delErr } = await adminCli.auth.admin.deleteUser(id);
+  if (delErr) return { ok: false, error: `Auth 삭제 실패: ${delErr.message}` };
+
+  revalidatePath("/admin/reps");
+  return { ok: true };
+}

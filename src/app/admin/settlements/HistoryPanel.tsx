@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { formatKRW } from "@/lib/fmt";
 import { cancelSettlement } from "./actions";
 
@@ -72,6 +73,7 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
                 <th className="px-3 py-2 text-right w-36">공급가 합계</th>
                 <th className="px-3 py-2 text-right w-36">수수료 합계</th>
                 <th className="px-3 py-2 w-40">확정일시</th>
+                <th className="px-3 py-2 w-24">상세</th>
                 <th className="px-3 py-2 w-24">취소</th>
               </tr>
             </thead>
@@ -97,6 +99,14 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
                       {new Date(r.finalized_at).toLocaleString("ko-KR", {
                         hour12: false,
                       })}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/admin/settlements/${r.id}`}
+                        className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1 text-xs text-blue-700 hover:bg-blue-100"
+                      >
+                        상세보기
+                      </Link>
                     </td>
                     <td className="px-3 py-2">
                       <button

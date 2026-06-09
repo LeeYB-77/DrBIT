@@ -3,6 +3,7 @@
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { parsePct } from "@/lib/fmt";
 import { revalidatePath } from "next/cache";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -11,6 +12,7 @@ export async function createOrUpdateCost(args: {
   product_code: string;
   product_name?: string;
   cost: number;
+  commission_rate_override?: number | null;
 }): Promise<ActionResult> {
   await requireAdmin();
   const supabase = await createClient();
@@ -20,6 +22,21 @@ export async function createOrUpdateCost(args: {
   if (!Number.isFinite(args.cost) || args.cost < 0)
     return { ok: false, error: "원가는 0 이상이어야 합니다." };
 
+  let override: number | null = null;
+  if (args.commission_rate_override !== null && args.commission_rate_override !== undefined) {
+    if (
+      !Number.isFinite(args.commission_rate_override) ||
+      args.commission_rate_override < 0 ||
+      args.commission_rate_override > 1
+    ) {
+      return {
+        ok: false,
+        error: "별도 수수료율은 0~100% 사이여야 합니다.",
+      };
+    }
+    override = args.commission_rate_override;
+  }
+
   const { error } = await supabase
     .from("product_costs")
     .upsert(
@@ -27,11 +44,40 @@ export async function createOrUpdateCost(args: {
         product_code: code,
         product_name: args.product_name?.trim() || null,
         cost: args.cost,
+        commission_rate_override: override,
         active: true,
       },
       { onConflict: "product_code" },
     );
 
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/product-costs");
+  revalidatePath("/admin/sales");
+  return { ok: true };
+}
+
+export async function updateCostOverride(
+  id: string,
+  rateInput: string | null,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  let override: number | null = null;
+  if (rateInput !== null && rateInput.trim() !== "") {
+    const v = parsePct(rateInput);
+    if (v === null || v < 0 || v > 1)
+      return {
+        ok: false,
+        error: "별도 수수료율은 0~100% 사이여야 합니다.",
+      };
+    override = v;
+  }
+
+  const { error } = await supabase
+    .from("product_costs")
+    .update({ commission_rate_override: override })
+    .eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/product-costs");
   revalidatePath("/admin/sales");
