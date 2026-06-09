@@ -6,13 +6,10 @@ export function Navbar({ profile }: { profile: Profile }) {
   const links = isAdmin
     ? [
         { href: "/admin", label: "대시보드" },
-        { href: "/admin/categories", label: "수수료" },
-        { href: "/admin/product-costs", label: "원가" },
-        { href: "/admin/reps", label: "담당자" },
-        { href: "/admin/upload", label: "매출 업로드" },
         { href: "/admin/sales", label: "매출/수금" },
         { href: "/admin/settlements", label: "정산" },
         { href: "/admin/reports", label: "리포트" },
+        { href: "/admin/settings", label: "설정" },
       ]
     : [{ href: "/me/settlements", label: "내 정산" }];
 

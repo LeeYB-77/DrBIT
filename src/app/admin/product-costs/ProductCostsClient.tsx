@@ -177,6 +177,10 @@ export function ProductCostsClient({
           엑셀 컬럼: <b>품번</b>, <b>품명</b>(선택), <b>원가</b> (또는{" "}
           <b>단가</b>). 같은 품번이 여러 번 등장하면{" "}
           <b>가장 비싼 가격</b>이 채택됩니다.
+          <br />
+          📢 엑셀의 원가는{" "}
+          <b className="text-amber-700">자동으로 5% 인상</b>되어 저장됩니다 (예:
+          엑셀 100,000 → DB 105,000). 수동 등록은 인상 적용 안 됨.
         </div>
         <input
           ref={fileInputRef}
@@ -222,12 +226,17 @@ export function ProductCostsClient({
             </div>
           </div>
 
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            모든 원가에 <b>+5% 인상</b>이 적용됐습니다 (엑셀의 원본가 × 1.05 =
+            저장된 가격).
+          </div>
+
           {uploadReport.conflicts.length > 0 && (
             <div>
               <div className="font-medium text-blue-900 mb-1">
                 ⚖ 같은 품번에 다른 가격 발견: {uploadReport.conflicts.length}건
                 <span className="ml-1 text-xs font-normal text-gray-600">
-                  (최고가가 등록됨)
+                  (엑셀 원본 최고가 + 5% 인상이 등록됨)
                 </span>
               </div>
               <div className="overflow-x-auto rounded-md border bg-white">
@@ -235,8 +244,9 @@ export function ProductCostsClient({
                   <thead className="bg-gray-50 text-left font-medium uppercase text-gray-500">
                     <tr>
                       <th className="px-2 py-1">품번</th>
-                      <th className="px-2 py-1 text-right">채택된 가격</th>
-                      <th className="px-2 py-1">대안 가격(들)</th>
+                      <th className="px-2 py-1 text-right">엑셀 원본 최고가</th>
+                      <th className="px-2 py-1 text-right">저장된 가격 (+5%)</th>
+                      <th className="px-2 py-1">엑셀의 다른 가격(원본)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -244,6 +254,9 @@ export function ProductCostsClient({
                       <tr key={c.product_code}>
                         <td className="px-2 py-1 font-mono">
                           {c.product_code}
+                        </td>
+                        <td className="px-2 py-1 text-right text-gray-600">
+                          {formatKRW(c.chosen_raw)}
                         </td>
                         <td className="px-2 py-1 text-right font-semibold text-blue-700">
                           {formatKRW(c.chosen_cost)}

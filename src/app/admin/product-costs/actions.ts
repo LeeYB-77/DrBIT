@@ -6,6 +6,16 @@ import { requireAdmin } from "@/lib/auth";
 import { parsePct } from "@/lib/fmt";
 import { revalidatePath } from "next/cache";
 
+/**
+ * 엑셀 업로드 시 적용되는 원가 자동 인상률.
+ * 1.05 = 엑셀의 원가 × 1.05 로 저장 (즉 5% 인상).
+ * 수동 등록(createOrUpdateCost / updateCost)에는 적용되지 않음.
+ *
+ * NOTE: "use server" 파일은 async 함수 외 export 불가 → 파일 내부 상수로 보관.
+ */
+const COST_UPLOAD_MARKUP = 1.05;
+const COST_UPLOAD_MARKUP_PCT = (COST_UPLOAD_MARKUP - 1) * 100; // 5
+
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export async function createOrUpdateCost(args: {
@@ -130,8 +140,9 @@ export async function deleteCost(id: string): Promise<ActionResult> {
 
 export type UploadConflict = {
   product_code: string;
-  chosen_cost: number;
-  other_costs: number[];
+  chosen_cost: number; // 인상 후 가격
+  chosen_raw: number; // 엑셀 원본 가격 (인상 전)
+  other_costs: number[]; // 엑셀 원본 다른 가격들 (인상 전)
 };
 
 export type UploadResult =
@@ -140,8 +151,9 @@ export type UploadResult =
       total_rows: number;
       processed: number;
       skipped: number;
+      markup_pct: number;
       conflicts: UploadConflict[];
-      samples: { code: string; cost: number }[];
+      samples: { code: string; cost: number; raw: number }[];
     }
   | { ok: false; error: string };
 
@@ -188,12 +200,12 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
   if (costIdx === -1)
     return { ok: false, error: "'원가' / '단가' 컬럼이 필요합니다." };
 
-  // 1차 파싱: 모든 행을 순회
+  // 1차 파싱: 모든 행을 순회 (raw cost = 인상 전 가격)
   let totalRows = 0;
   let skipped = 0;
   const codeToBest = new Map<
     string,
-    { product_name: string | null; cost: number; allCosts: number[] }
+    { product_name: string | null; rawCost: number; allRawCosts: number[] }
   >();
 
   for (let i = 1; i < data.length; i++) {
@@ -219,15 +231,14 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
     if (!existing) {
       codeToBest.set(code, {
         product_name: name,
-        cost,
-        allCosts: [cost],
+        rawCost: cost,
+        allRawCosts: [cost],
       });
     } else {
-      existing.allCosts.push(cost);
-      // 같은 품번 중 최고가를 채택 (사용자 정책)
-      if (cost > existing.cost) {
-        existing.cost = cost;
-        // 품명은 최고가 행의 것 또는 비어있지 않은 첫 값 우선
+      existing.allRawCosts.push(cost);
+      // 같은 품번 중 최고가(raw 기준)를 채택
+      if (cost > existing.rawCost) {
+        existing.rawCost = cost;
         if (name) existing.product_name = name;
       }
     }
@@ -237,24 +248,32 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
     return { ok: false, error: "유효 데이터가 없습니다." };
   }
 
-  // 중복(다른 가격)이 있는 품번 추출
+  // 인상률 적용 함수
+  function applyMarkup(raw: number) {
+    return Math.round(raw * COST_UPLOAD_MARKUP);
+  }
+
+  // 중복(다른 가격)이 있는 품번 추출 (raw + 인상 후 모두 보고)
   const conflicts: UploadConflict[] = [];
   for (const [code, v] of codeToBest) {
-    const uniqueCosts = Array.from(new Set(v.allCosts));
-    if (uniqueCosts.length > 1) {
+    const uniqueRaws = Array.from(new Set(v.allRawCosts));
+    if (uniqueRaws.length > 1) {
       conflicts.push({
         product_code: code,
-        chosen_cost: v.cost,
-        other_costs: uniqueCosts.filter((c) => c !== v.cost).sort((a, b) => b - a),
+        chosen_cost: applyMarkup(v.rawCost),
+        chosen_raw: v.rawCost,
+        other_costs: uniqueRaws
+          .filter((c) => c !== v.rawCost)
+          .sort((a, b) => b - a),
       });
     }
   }
 
-  // upsert용 행 배열
+  // upsert용 행 배열 — 인상률 적용해서 저장
   const rows = Array.from(codeToBest.entries()).map(([code, v]) => ({
     product_code: code,
     product_name: v.product_name,
-    cost: v.cost,
+    cost: applyMarkup(v.rawCost),
     active: true,
   }));
 
@@ -272,12 +291,14 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
     total_rows: totalRows,
     processed: rows.length,
     skipped,
+    markup_pct: COST_UPLOAD_MARKUP_PCT,
     conflicts: conflicts.sort((a, b) =>
       a.product_code.localeCompare(b.product_code),
     ),
-    samples: rows.slice(0, 5).map((r) => ({
-      code: r.product_code,
-      cost: r.cost,
-    })),
+    samples: rows.slice(0, 5).map((r) => {
+      const code = r.product_code;
+      const raw = codeToBest.get(code)!.rawCost;
+      return { code, cost: r.cost, raw };
+    }),
   };
 }
