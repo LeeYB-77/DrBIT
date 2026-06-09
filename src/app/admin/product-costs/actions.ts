@@ -82,8 +82,21 @@ export async function deleteCost(id: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+export type UploadConflict = {
+  product_code: string;
+  chosen_cost: number;
+  other_costs: number[];
+};
+
 export type UploadResult =
-  | { ok: true; processed: number; samples: { code: string; cost: number }[] }
+  | {
+      ok: true;
+      total_rows: number;
+      processed: number;
+      skipped: number;
+      conflicts: UploadConflict[];
+      samples: { code: string; cost: number }[];
+    }
   | { ok: false; error: string };
 
 export async function uploadCosts(formData: FormData): Promise<UploadResult> {
@@ -115,9 +128,7 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
   const header = (data[0] ?? []).map((v) => String(v ?? "").trim());
   function findColumn(...names: string[]) {
     for (const n of names) {
-      const i = header.findIndex(
-        (h) => h.toLowerCase() === n.toLowerCase(),
-      );
+      const i = header.findIndex((h) => h.toLowerCase() === n.toLowerCase());
       if (i >= 0) return i;
     }
     return -1;
@@ -129,38 +140,77 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
   if (codeIdx === -1)
     return { ok: false, error: "'품번' 컬럼이 필요합니다." };
   if (costIdx === -1)
-    return { ok: false, error: "'원가' 컬럼이 필요합니다." };
+    return { ok: false, error: "'원가' / '단가' 컬럼이 필요합니다." };
 
-  const rows: {
-    product_code: string;
-    product_name: string | null;
-    cost: number;
-    active: boolean;
-  }[] = [];
-  const skipped: string[] = [];
+  // 1차 파싱: 모든 행을 순회
+  let totalRows = 0;
+  let skipped = 0;
+  const codeToBest = new Map<
+    string,
+    { product_name: string | null; cost: number; allCosts: number[] }
+  >();
 
   for (let i = 1; i < data.length; i++) {
     const r = data[i];
     if (!r) continue;
+    totalRows += 1;
+
     const code = String(r[codeIdx] ?? "").trim();
-    if (!code) continue;
-    const name =
-      nameIdx >= 0 ? String(r[nameIdx] ?? "").trim() || null : null;
+    if (!code) {
+      skipped += 1;
+      continue;
+    }
     const costRaw = r[costIdx];
     const cost = Number(costRaw);
     if (!Number.isFinite(cost) || cost < 0) {
-      skipped.push(`${code} (원가:${costRaw})`);
+      skipped += 1;
       continue;
     }
-    rows.push({ product_code: code, product_name: name, cost, active: true });
+    const name =
+      nameIdx >= 0 ? String(r[nameIdx] ?? "").trim() || null : null;
+
+    const existing = codeToBest.get(code);
+    if (!existing) {
+      codeToBest.set(code, {
+        product_name: name,
+        cost,
+        allCosts: [cost],
+      });
+    } else {
+      existing.allCosts.push(cost);
+      // 같은 품번 중 최고가를 채택 (사용자 정책)
+      if (cost > existing.cost) {
+        existing.cost = cost;
+        // 품명은 최고가 행의 것 또는 비어있지 않은 첫 값 우선
+        if (name) existing.product_name = name;
+      }
+    }
   }
 
-  if (rows.length === 0) {
-    return {
-      ok: false,
-      error: `유효 데이터 없음.${skipped.length ? " 스킵: " + skipped.slice(0, 3).join(", ") : ""}`,
-    };
+  if (codeToBest.size === 0) {
+    return { ok: false, error: "유효 데이터가 없습니다." };
   }
+
+  // 중복(다른 가격)이 있는 품번 추출
+  const conflicts: UploadConflict[] = [];
+  for (const [code, v] of codeToBest) {
+    const uniqueCosts = Array.from(new Set(v.allCosts));
+    if (uniqueCosts.length > 1) {
+      conflicts.push({
+        product_code: code,
+        chosen_cost: v.cost,
+        other_costs: uniqueCosts.filter((c) => c !== v.cost).sort((a, b) => b - a),
+      });
+    }
+  }
+
+  // upsert용 행 배열
+  const rows = Array.from(codeToBest.entries()).map(([code, v]) => ({
+    product_code: code,
+    product_name: v.product_name,
+    cost: v.cost,
+    active: true,
+  }));
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -173,7 +223,12 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
 
   return {
     ok: true,
+    total_rows: totalRows,
     processed: rows.length,
+    skipped,
+    conflicts: conflicts.sort((a, b) =>
+      a.product_code.localeCompare(b.product_code),
+    ),
     samples: rows.slice(0, 5).map((r) => ({
       code: r.product_code,
       cost: r.cost,

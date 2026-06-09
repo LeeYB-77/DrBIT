@@ -8,6 +8,7 @@ import {
   updateCost,
   updateCostName,
   uploadCosts,
+  type UploadConflict,
 } from "./actions";
 
 export type Cost = {
@@ -40,6 +41,12 @@ export function ProductCostsClient({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [uploadReport, setUploadReport] = useState<{
+    total: number;
+    processed: number;
+    skipped: number;
+    conflicts: UploadConflict[];
+  } | null>(null);
   const [draftCode, setDraftCode] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftCost, setDraftCost] = useState("");
@@ -82,12 +89,28 @@ export function ProductCostsClient({
   function onUpload(file: File) {
     setError(null);
     setSuccess(null);
+    setUploadReport(null);
     const fd = new FormData();
     fd.append("file", file);
     startTransition(async () => {
       const r = await uploadCosts(fd);
-      if (!r.ok) setError(r.error);
-      else notice(`${r.processed}건 등록/업데이트 완료`);
+      if (!r.ok) {
+        setError(r.error);
+      } else {
+        setUploadReport({
+          total: r.total_rows,
+          processed: r.processed,
+          skipped: r.skipped,
+          conflicts: r.conflicts,
+        });
+        notice(
+          `엑셀 ${r.total_rows}행 처리 → 유니크 ${r.processed}품번 등록/업데이트${
+            r.conflicts.length > 0
+              ? ` (중복 ${r.conflicts.length}건은 최고가 채택)`
+              : ""
+          }`,
+        );
+      }
       if (fileInputRef.current) fileInputRef.current.value = "";
     });
   }
@@ -134,8 +157,9 @@ export function ProductCostsClient({
       <section className="rounded-lg border bg-white p-4 space-y-2">
         <div className="text-sm font-medium">엑셀로 일괄 업로드</div>
         <div className="text-xs text-gray-500">
-          엑셀 컬럼: <b>품번</b>, <b>품명</b>(선택), <b>원가</b>. 같은 품번은
-          덮어쓰기.
+          엑셀 컬럼: <b>품번</b>, <b>품명</b>(선택), <b>원가</b> (또는{" "}
+          <b>단가</b>). 같은 품번이 여러 번 등장하면{" "}
+          <b>가장 비싼 가격</b>이 채택됩니다.
         </div>
         <input
           ref={fileInputRef}
@@ -149,6 +173,76 @@ export function ProductCostsClient({
           className="block w-full text-sm file:mr-3 file:rounded file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700 disabled:opacity-50"
         />
       </section>
+
+      {/* 업로드 결과 상세 */}
+      {uploadReport && (
+        <section className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3 text-sm">
+          <div className="flex items-center justify-between">
+            <div className="font-medium text-blue-900">📥 업로드 결과</div>
+            <button
+              onClick={() => setUploadReport(null)}
+              className="text-xs text-blue-700 hover:underline"
+            >
+              닫기
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="rounded-md bg-white p-2">
+              <div className="text-gray-500">엑셀 전체 행</div>
+              <div className="text-lg font-semibold">{uploadReport.total}</div>
+            </div>
+            <div className="rounded-md bg-white p-2">
+              <div className="text-gray-500">유니크 품번</div>
+              <div className="text-lg font-semibold text-blue-700">
+                {uploadReport.processed}
+              </div>
+            </div>
+            <div className="rounded-md bg-white p-2">
+              <div className="text-gray-500">스킵 (잘못된 행)</div>
+              <div className="text-lg font-semibold text-gray-600">
+                {uploadReport.skipped}
+              </div>
+            </div>
+          </div>
+
+          {uploadReport.conflicts.length > 0 && (
+            <div>
+              <div className="font-medium text-blue-900 mb-1">
+                ⚖ 같은 품번에 다른 가격 발견: {uploadReport.conflicts.length}건
+                <span className="ml-1 text-xs font-normal text-gray-600">
+                  (최고가가 등록됨)
+                </span>
+              </div>
+              <div className="overflow-x-auto rounded-md border bg-white">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-left font-medium uppercase text-gray-500">
+                    <tr>
+                      <th className="px-2 py-1">품번</th>
+                      <th className="px-2 py-1 text-right">채택된 가격</th>
+                      <th className="px-2 py-1">대안 가격(들)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {uploadReport.conflicts.map((c) => (
+                      <tr key={c.product_code}>
+                        <td className="px-2 py-1 font-mono">
+                          {c.product_code}
+                        </td>
+                        <td className="px-2 py-1 text-right font-semibold text-blue-700">
+                          {formatKRW(c.chosen_cost)}
+                        </td>
+                        <td className="px-2 py-1 text-gray-500">
+                          {c.other_costs.map((v) => formatKRW(v)).join(", ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">
