@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import * as XLSX from "xlsx";
 import { formatKRW, formatPct, parsePct } from "@/lib/fmt";
 import {
   createOrUpdateCost,
@@ -11,6 +12,40 @@ import {
   uploadCosts,
   type UploadConflict,
 } from "./actions";
+
+function downloadCostTemplate() {
+  // 원가 3컬럼 양식 + 샘플 2행
+  const header = ["품번", "품명", "원가"];
+  const samples = [
+    ["MH0103-AT003", "키오스크 TS-122 (10\")", 500000],
+    ["MH0502-XX001", "SSD NVMe 500GB", 180000],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...samples]);
+  ws["!cols"] = [{ wch: 16 }, { wch: 30 }, { wch: 12 }];
+
+  // 안내 시트
+  const guide = [
+    ["원가 업로드 양식 — 안내"],
+    [""],
+    ["1. 헤더(1행)는 위 3개 컬럼: 품번 / 품명 / 원가"],
+    ["   - '원가' 대신 '단가'로 적어도 인식됩니다."],
+    ["   - '품명' 컬럼은 선택. 비워둘 수 있음."],
+    ["2. 같은 품번이 여러 번 등장하면 가장 비싼 가격이 채택됩니다."],
+    ["3. 업로드 시 모든 원가에 자동으로 +5% 인상이 적용됩니다."],
+    ["   예: 엑셀 500,000 → DB 525,000"],
+    ["4. 상품(M·H·S 시작) 품번만 매출의 수익 계산에 사용됩니다."],
+    ["   - 상품 수수료 = (공급가 − 원가) × 수수료율"],
+    ["   - 프로그램(P)은 원가 영향 없음"],
+    ["5. 같은 품번을 다시 업로드하면 덮어쓰기 됩니다."],
+  ];
+  const wsGuide = XLSX.utils.aoa_to_sheet(guide);
+  wsGuide["!cols"] = [{ wch: 80 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "원가");
+  XLSX.utils.book_append_sheet(wb, wsGuide, "안내");
+  XLSX.writeFile(wb, "원가_업로드_양식.xlsx");
+}
 
 export type Cost = {
   id: string;
@@ -172,7 +207,17 @@ export function ProductCostsClient({
 
       {/* 2. 엑셀 업로드 */}
       <section className="rounded-lg border bg-white p-4 space-y-2">
-        <div className="text-sm font-medium">엑셀로 일괄 업로드</div>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">엑셀로 일괄 업로드</div>
+          <button
+            type="button"
+            onClick={downloadCostTemplate}
+            className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs text-blue-700 hover:bg-blue-100"
+            title="3개 컬럼 + 샘플 2행 + 안내 시트가 포함된 양식 파일"
+          >
+            📋 양식 다운로드
+          </button>
+        </div>
         <div className="text-xs text-gray-500">
           엑셀 컬럼: <b>품번</b>, <b>품명</b>(선택), <b>원가</b> (또는{" "}
           <b>단가</b>). 같은 품번이 여러 번 등장하면{" "}

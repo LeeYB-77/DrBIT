@@ -1,9 +1,103 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import * as XLSX from "xlsx";
 import { commitUpload, parsePreview } from "./actions";
 import type { CommitResult, PreviewResult } from "./types";
 import { formatKRW } from "@/lib/fmt";
+
+function downloadSalesTemplate() {
+  // 매출현황 13컬럼 양식 + 샘플 2행
+  const header = [
+    "No",
+    "고객",
+    "마감일자",
+    "고객코드",
+    "품번",
+    "품명",
+    "마감수량",
+    "단가",
+    "공급가",
+    "부가세",
+    "합계",
+    "프로젝트",
+    "담당자",
+  ];
+  const samples = [
+    [
+      1,
+      "(주)샘플의원(서울시 강남구)",
+      "2026-06-15",
+      "10001",
+      "P010-00305",
+      "비트U차트",
+      1,
+      700000,
+      700000,
+      70000,
+      770000,
+      "닥터비트사업부",
+      "박상수",
+    ],
+    [
+      2,
+      "(주)샘플의원(서울시 강남구)",
+      "2026-06-15",
+      "10001",
+      "MH0103-AT003",
+      "키오스크 TS-122 (10\")",
+      1,
+      800000,
+      800000,
+      80000,
+      880000,
+      "닥터비트사업부",
+      "박상수",
+    ],
+  ];
+  const aoa = [header, ...samples];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [
+    { wch: 5 },
+    { wch: 28 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 8 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 10 },
+  ];
+
+  // 안내 시트
+  const guide = [
+    ["매출현황 업로드 양식 — 안내"],
+    [""],
+    ["1. 시트1에 데이터를 입력하세요. 시트 이름은 무관합니다."],
+    ["2. 헤더(1행)는 위 13개 컬럼 순서를 그대로 유지하세요."],
+    ["3. '고객' 컬럼은 같은 거래의 둘째 행부터 비워두면 자동으로 위 값이 채워집니다."],
+    ["4. 소계 행(품번/단가가 비어있는 행)은 자동으로 무시됩니다."],
+    ["5. 마지막 합계 행(\"합계\")도 자동 제외됩니다."],
+    ["6. '담당자' 이름은 시스템에 등록된 담당자 이름과 일치해야 매칭됩니다."],
+    ["7. '품번' 첫 글자가 P → 프로그램, M·H·S → 상품 카테고리로 자동 분류."],
+    [""],
+    ["수수료 계산식:"],
+    [" - 프로그램: 공급가 × 수수료율"],
+    [" - 상품: (공급가 − 원가) × 수수료율 (원가 미등록 시 원가 0으로 처리)"],
+    [" - 별도 수수료율이 등록된 품번은 카테고리율 대신 별도율 적용"],
+  ];
+  const wsGuide = XLSX.utils.aoa_to_sheet(guide);
+  wsGuide["!cols"] = [{ wch: 80 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "매출현황");
+  XLSX.utils.book_append_sheet(wb, wsGuide, "안내");
+  XLSX.writeFile(wb, "매출현황_업로드_양식.xlsx");
+}
 
 export function UploadClient() {
   const [file, setFile] = useState<File | null>(null);
@@ -49,10 +143,20 @@ export function UploadClient() {
   return (
     <div className="space-y-4">
       {/* 1. 파일 선택 */}
-      <div className="rounded-lg border bg-white p-4">
-        <label className="block text-sm font-medium mb-2">
-          엑셀 파일 선택 (.xlsx)
-        </label>
+      <div className="rounded-lg border bg-white p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium">
+            엑셀 파일 선택 (.xlsx)
+          </label>
+          <button
+            type="button"
+            onClick={downloadSalesTemplate}
+            className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs text-blue-700 hover:bg-blue-100"
+            title="13개 컬럼 + 샘플 2행 + 안내 시트가 포함된 양식 파일"
+          >
+            📋 양식 다운로드
+          </button>
+        </div>
         <div className="flex items-center gap-3">
           <input
             type="file"
@@ -75,7 +179,7 @@ export function UploadClient() {
           </button>
         </div>
         {file && (
-          <div className="mt-2 text-xs text-gray-500">
+          <div className="text-xs text-gray-500">
             선택: {file.name} ({(file.size / 1024).toFixed(1)} KB)
           </div>
         )}
