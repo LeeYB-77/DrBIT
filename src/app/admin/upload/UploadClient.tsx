@@ -378,12 +378,27 @@ function CommitPanel({
       <div className="font-medium text-green-900">✓ 업로드 완료</div>
       <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <div className="text-gray-600">신규 등록:</div>
-        <div>{committed.inserted}건</div>
+        <div className="font-semibold text-green-700">
+          {committed.inserted}건
+        </div>
         <div className="text-gray-600">기존 미수금/미정산 삭제:</div>
         <div>{committed.deleted}건</div>
+        <div className="text-gray-600">
+          중복 스킵 (이미 등록된 동일 매출):
+        </div>
+        <div className={committed.skipped_duplicates > 0 ? "font-semibold text-amber-700" : ""}>
+          {committed.skipped_duplicates}건
+        </div>
         <div className="text-gray-600">보존된 수금/정산 완료:</div>
         <div>{committed.preserved}건</div>
       </div>
+      {committed.skipped_duplicates > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          🛡 자연키(마감일자+고객코드+품번+수량+단가)가 동일한 매출{" "}
+          {committed.skipped_duplicates}건은 이미 등록되어 있어 중복 INSERT가
+          차단됐습니다.
+        </div>
+      )}
       <div className="pt-2">
         <button
           type="button"

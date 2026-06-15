@@ -304,14 +304,23 @@ export async function commitUpload(
     project: r.project,
   }));
 
-  const { error: insError, count: inserted } = await supabase
+  // upsert + ignoreDuplicates: 자연키 충돌 시 INSERT 안 함 (정산된 동일 매출 보호)
+  // 자연키: closing_date,customer_code,product_code,quantity,unit_price
+  const { data: insertedRows, error: insError } = await supabase
     .from("sales")
-    .insert(insertData, { count: "exact" });
+    .upsert(insertData, {
+      onConflict: "closing_date,customer_code,product_code,quantity,unit_price",
+      ignoreDuplicates: true,
+    })
+    .select("id");
 
   if (insError) {
     await supabase.from("upload_batches").delete().eq("id", batch.id);
     return { ok: false, error: `매출 INSERT 실패: ${insError.message}` };
   }
+
+  const inserted = insertedRows?.length ?? 0;
+  const skipped_duplicates = insertData.length - inserted;
 
   // 5. audit log
   await supabase.from("audit_logs").insert({
@@ -324,6 +333,8 @@ export async function commitUpload(
       filename: preview.filename,
       row_count: preview.rows.length,
       deleted: deleted ?? 0,
+      inserted,
+      skipped_duplicates,
       unmatched_reps: preview.unmatched_reps,
       unclassified_codes: preview.missing_products,
     },
@@ -335,7 +346,8 @@ export async function commitUpload(
   return {
     ok: true,
     batch_id: batch.id,
-    inserted: inserted ?? insertData.length,
+    inserted,
+    skipped_duplicates,
     deleted: deleted ?? 0,
     preserved: preserved ?? 0,
     missing_in_new_file: 0,

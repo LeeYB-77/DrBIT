@@ -40,6 +40,7 @@ export type CommitResult =
       ok: true;
       batch_id: string;
       inserted: number;
+      skipped_duplicates: number;
       deleted: number;
       preserved: number;
       missing_in_new_file: number;
