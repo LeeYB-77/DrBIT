@@ -4,24 +4,20 @@ import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { parsePct } from "@/lib/fmt";
+import { COST_MARKUP_PCT, appliedCost } from "@/lib/cost";
 import { revalidatePath } from "next/cache";
-
-/**
- * 엑셀 업로드 시 적용되는 원가 자동 인상률.
- * 1.05 = 엑셀의 원가 × 1.05 로 저장 (즉 5% 인상).
- * 수동 등록(createOrUpdateCost / updateCost)에는 적용되지 않음.
- *
- * NOTE: "use server" 파일은 async 함수 외 export 불가 → 파일 내부 상수로 보관.
- */
-const COST_UPLOAD_MARKUP = 1.05;
-const COST_UPLOAD_MARKUP_PCT = (COST_UPLOAD_MARKUP - 1) * 100; // 5
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
+/**
+ * 원가 등록/수정.
+ * - `cost` 인자는 등록원가(base_cost)다.
+ * - 적용원가(cost 컬럼) = round(등록원가 × 1.05) 로 자동 계산해 함께 저장한다.
+ */
 export async function createOrUpdateCost(args: {
   product_code: string;
   product_name?: string;
-  cost: number;
+  cost: number; // 등록원가
   commission_rate_override?: number | null;
 }): Promise<ActionResult> {
   await requireAdmin();
@@ -30,7 +26,7 @@ export async function createOrUpdateCost(args: {
   const code = args.product_code.trim();
   if (!code) return { ok: false, error: "품번을 입력하세요." };
   if (!Number.isFinite(args.cost) || args.cost < 0)
-    return { ok: false, error: "원가는 0 이상이어야 합니다." };
+    return { ok: false, error: "등록원가는 0 이상이어야 합니다." };
 
   let override: number | null = null;
   if (args.commission_rate_override !== null && args.commission_rate_override !== undefined) {
@@ -53,7 +49,8 @@ export async function createOrUpdateCost(args: {
       {
         product_code: code,
         product_name: args.product_name?.trim() || null,
-        cost: args.cost,
+        base_cost: args.cost,
+        cost: appliedCost(args.cost),
         commission_rate_override: override,
         active: true,
       },
@@ -94,18 +91,22 @@ export async function updateCostOverride(
   return { ok: true };
 }
 
+/**
+ * 등록원가 인라인 수정. `baseCost` = 등록원가.
+ * 적용원가(cost) = round(등록원가 × 1.05) 함께 갱신.
+ */
 export async function updateCost(
   id: string,
-  cost: number,
+  baseCost: number,
 ): Promise<ActionResult> {
   await requireAdmin();
   const supabase = await createClient();
-  if (!Number.isFinite(cost) || cost < 0)
-    return { ok: false, error: "원가는 0 이상이어야 합니다." };
+  if (!Number.isFinite(baseCost) || baseCost < 0)
+    return { ok: false, error: "등록원가는 0 이상이어야 합니다." };
 
   const { error } = await supabase
     .from("product_costs")
-    .update({ cost })
+    .update({ base_cost: baseCost, cost: appliedCost(baseCost) })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/product-costs");
@@ -248,19 +249,14 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
     return { ok: false, error: "유효 데이터가 없습니다." };
   }
 
-  // 인상률 적용 함수
-  function applyMarkup(raw: number) {
-    return Math.round(raw * COST_UPLOAD_MARKUP);
-  }
-
-  // 중복(다른 가격)이 있는 품번 추출 (raw + 인상 후 모두 보고)
+  // 중복(다른 가격)이 있는 품번 추출 (등록원가 + 적용원가 모두 보고)
   const conflicts: UploadConflict[] = [];
   for (const [code, v] of codeToBest) {
     const uniqueRaws = Array.from(new Set(v.allRawCosts));
     if (uniqueRaws.length > 1) {
       conflicts.push({
         product_code: code,
-        chosen_cost: applyMarkup(v.rawCost),
+        chosen_cost: appliedCost(v.rawCost),
         chosen_raw: v.rawCost,
         other_costs: uniqueRaws
           .filter((c) => c !== v.rawCost)
@@ -269,11 +265,12 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
     }
   }
 
-  // upsert용 행 배열 — 인상률 적용해서 저장
+  // upsert용 행 배열 — 엑셀 원가는 등록원가, 적용원가 = round(등록원가 × 1.05)
   const rows = Array.from(codeToBest.entries()).map(([code, v]) => ({
     product_code: code,
     product_name: v.product_name,
-    cost: applyMarkup(v.rawCost),
+    base_cost: v.rawCost,
+    cost: appliedCost(v.rawCost),
     active: true,
   }));
 
@@ -291,7 +288,7 @@ export async function uploadCosts(formData: FormData): Promise<UploadResult> {
     total_rows: totalRows,
     processed: rows.length,
     skipped,
-    markup_pct: COST_UPLOAD_MARKUP_PCT,
+    markup_pct: COST_MARKUP_PCT,
     conflicts: conflicts.sort((a, b) =>
       a.product_code.localeCompare(b.product_code),
     ),

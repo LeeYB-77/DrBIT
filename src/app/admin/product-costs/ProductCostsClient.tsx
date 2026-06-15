@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import * as XLSX from "xlsx";
 import { formatKRW, formatPct, parsePct } from "@/lib/fmt";
+import { COST_MARKUP_PCT, appliedCost } from "@/lib/cost";
 import {
   createOrUpdateCost,
   deleteCost,
@@ -30,11 +31,11 @@ function downloadCostTemplate() {
     ["1. 헤더(1행)는 위 3개 컬럼: 품번 / 품명 / 원가"],
     ["   - '원가' 대신 '단가'로 적어도 인식됩니다."],
     ["   - '품명' 컬럼은 선택. 비워둘 수 있음."],
-    ["2. 같은 품번이 여러 번 등장하면 가장 비싼 가격이 채택됩니다."],
-    ["3. 업로드 시 모든 원가에 자동으로 +5% 인상이 적용됩니다."],
-    ["   예: 엑셀 500,000 → DB 525,000"],
+    ["2. 같은 품번이 여러 번 등장하면 가장 비싼 가격이 등록원가로 채택됩니다."],
+    ["3. 엑셀의 원가는 등록원가로 저장되고, 적용원가 = 등록원가 + 5%로 자동 계산됩니다."],
+    ["   예: 등록원가 500,000 → 적용원가 525,000"],
     ["4. 상품(M·H·S 시작) 품번만 매출의 수익 계산에 사용됩니다."],
-    ["   - 상품 수수료 = (공급가 − 원가) × 수수료율"],
+    ["   - 상품 수수료 = (공급가 − 적용원가) × 수수료율"],
     ["   - 프로그램(P)은 원가 영향 없음"],
     ["5. 같은 품번을 다시 업로드하면 덮어쓰기 됩니다."],
   ];
@@ -51,7 +52,8 @@ export type Cost = {
   id: string;
   product_code: string;
   product_name: string | null;
-  cost: number;
+  base_cost: number; // 등록원가
+  cost: number; // 적용원가 = round(등록원가 × 1.05)
   commission_rate_override: number | null;
   active: boolean;
   updated_at: string | null;
@@ -89,6 +91,12 @@ export function ProductCostsClient({
   const [draftCost, setDraftCost] = useState("");
   const [draftOverride, setDraftOverride] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const draftBase = Number(draftCost.replaceAll(",", ""));
+  const draftApplied =
+    draftCost.trim() !== "" && Number.isFinite(draftBase) && draftBase >= 0
+      ? appliedCost(draftBase)
+      : null;
 
   function notice(msg: string) {
     setSuccess(msg);
@@ -182,7 +190,7 @@ export function ProductCostsClient({
             id="draft-cost"
             value={draftCost}
             onChange={(e) => setDraftCost(e.target.value)}
-            placeholder="원가"
+            placeholder="등록원가"
             className="rounded-md border px-3 py-2 text-sm text-right outline-none focus:border-blue-500"
           />
           <input
@@ -200,7 +208,14 @@ export function ProductCostsClient({
           </button>
         </div>
         <div className="text-xs text-gray-500">
-          별도 수수료율을 입력하면 카테고리율 대신 이 값이 적용됩니다 (예:{" "}
+          <b>등록원가</b>를 입력하면 <b>적용원가 = 등록원가 + {COST_MARKUP_PCT}%</b>로
+          자동 저장됩니다
+          {draftApplied !== null && (
+            <span className="ml-1 text-blue-700">
+              (적용원가 = <b>{formatKRW(draftApplied)}</b>)
+            </span>
+          )}
+          . 별도 수수료율을 입력하면 카테고리율 대신 이 값이 적용됩니다 (예:{" "}
           <code>15</code> 또는 <code>15%</code>). 비우면 카테고리율 사용.
         </div>
       </section>
@@ -220,12 +235,12 @@ export function ProductCostsClient({
         </div>
         <div className="text-xs text-gray-500">
           엑셀 컬럼: <b>품번</b>, <b>품명</b>(선택), <b>원가</b> (또는{" "}
-          <b>단가</b>). 같은 품번이 여러 번 등장하면{" "}
-          <b>가장 비싼 가격</b>이 채택됩니다.
+          <b>단가</b>). 엑셀의 원가는 <b>등록원가</b>로 저장됩니다. 같은 품번이
+          여러 번 등장하면 <b>가장 비싼 가격</b>이 채택됩니다.
           <br />
-          📢 엑셀의 원가는{" "}
-          <b className="text-amber-700">자동으로 5% 인상</b>되어 저장됩니다 (예:
-          엑셀 100,000 → DB 105,000). 수동 등록은 인상 적용 안 됨.
+          📢 적용원가 ={" "}
+          <b className="text-amber-700">등록원가 + {COST_MARKUP_PCT}%</b> (예:
+          등록원가 100,000 → 적용원가 105,000). 수동 등록도 동일하게 적용됩니다.
         </div>
         <input
           ref={fileInputRef}
@@ -272,8 +287,8 @@ export function ProductCostsClient({
           </div>
 
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            모든 원가에 <b>+5% 인상</b>이 적용됐습니다 (엑셀의 원본가 × 1.05 =
-            저장된 가격).
+            엑셀의 원가는 <b>등록원가</b>로 저장되고, <b>적용원가 = 등록원가 +{" "}
+            {COST_MARKUP_PCT}%</b>로 자동 계산됐습니다.
           </div>
 
           {uploadReport.conflicts.length > 0 && (
@@ -281,7 +296,7 @@ export function ProductCostsClient({
               <div className="font-medium text-blue-900 mb-1">
                 ⚖ 같은 품번에 다른 가격 발견: {uploadReport.conflicts.length}건
                 <span className="ml-1 text-xs font-normal text-gray-600">
-                  (엑셀 원본 최고가 + 5% 인상이 등록됨)
+                  (최고가를 등록원가로 채택)
                 </span>
               </div>
               <div className="overflow-x-auto rounded-md border bg-white">
@@ -289,9 +304,9 @@ export function ProductCostsClient({
                   <thead className="bg-gray-50 text-left font-medium uppercase text-gray-500">
                     <tr>
                       <th className="px-2 py-1">품번</th>
-                      <th className="px-2 py-1 text-right">엑셀 원본 최고가</th>
-                      <th className="px-2 py-1 text-right">저장된 가격 (+5%)</th>
-                      <th className="px-2 py-1">엑셀의 다른 가격(원본)</th>
+                      <th className="px-2 py-1 text-right">등록원가 (최고가)</th>
+                      <th className="px-2 py-1 text-right">적용원가 (+{COST_MARKUP_PCT}%)</th>
+                      <th className="px-2 py-1">엑셀의 다른 가격</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -392,7 +407,10 @@ export function ProductCostsClient({
                 <tr>
                   <th className="px-3 py-2">품번</th>
                   <th className="px-3 py-2">품명</th>
-                  <th className="px-3 py-2 text-right w-40">원가</th>
+                  <th className="px-3 py-2 text-right w-36">등록원가</th>
+                  <th className="px-3 py-2 text-right w-36">
+                    적용원가 <span className="font-normal normal-case text-gray-400">(+{COST_MARKUP_PCT}%)</span>
+                  </th>
                   <th className="px-3 py-2 text-right w-40">별도 수수료율</th>
                   <th className="px-3 py-2 w-20">삭제</th>
                 </tr>
@@ -406,8 +424,8 @@ export function ProductCostsClient({
           </div>
         )}
         <div className="text-xs text-gray-500">
-          원가 수정 시 해당 품번의 미정산 매출이 자동 재계산됩니다. 정산된
-          매출은 영향 없음.
+          등록원가 수정 시 적용원가(+{COST_MARKUP_PCT}%)가 재계산되고, 해당 품번의
+          미정산 매출이 자동 재계산됩니다. 정산된 매출은 영향 없음.
         </div>
       </section>
     </div>
@@ -416,7 +434,7 @@ export function ProductCostsClient({
 
 function CostRow({ cost }: { cost: Cost }) {
   const [name, setName] = useState(cost.product_name ?? "");
-  const [costInput, setCostInput] = useState(formatKRW(cost.cost));
+  const [costInput, setCostInput] = useState(formatKRW(cost.base_cost));
   const [overrideInput, setOverrideInput] = useState(
     cost.commission_rate_override === null
       ? ""
@@ -438,15 +456,15 @@ function CostRow({ cost }: { cost: Cost }) {
 
   function saveCost() {
     const n = Number(costInput.replaceAll(",", "").trim());
-    if (!Number.isFinite(n) || n === cost.cost) {
-      setCostInput(formatKRW(cost.cost));
+    if (!Number.isFinite(n) || n < 0 || n === cost.base_cost) {
+      setCostInput(formatKRW(cost.base_cost));
       return;
     }
     startTransition(async () => {
       const r = await updateCost(cost.id, n);
       if (!r.ok) {
         setError(r.error);
-        setCostInput(formatKRW(cost.cost));
+        setCostInput(formatKRW(cost.base_cost));
       }
     });
   }
@@ -477,6 +495,9 @@ function CostRow({ cost }: { cost: Cost }) {
   }
 
   const hasOverride = cost.commission_rate_override !== null;
+  const liveBase = Number(costInput.replaceAll(",", "").trim());
+  const liveApplied =
+    Number.isFinite(liveBase) && liveBase >= 0 ? appliedCost(liveBase) : cost.cost;
 
   return (
     <tr className={pending ? "opacity-50" : ""}>
@@ -495,8 +516,11 @@ function CostRow({ cost }: { cost: Cost }) {
           value={costInput}
           onChange={(e) => setCostInput(e.target.value)}
           onBlur={saveCost}
-          className="w-32 rounded-md border border-transparent px-2 py-1 text-right hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+          className="w-28 rounded-md border border-transparent px-2 py-1 text-right hover:border-gray-300 focus:border-blue-500 focus:outline-none"
         />
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums text-gray-600" title="적용원가 = 등록원가 + 5% (수수료 계산에 사용)">
+        {formatKRW(liveApplied)}
       </td>
       <td className="px-3 py-2 text-right">
         <input

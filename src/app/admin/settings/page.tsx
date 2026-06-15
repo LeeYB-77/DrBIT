@@ -10,7 +10,7 @@ const SETTINGS_CARDS = [
   {
     href: "/admin/product-costs",
     title: "상품 원가 / 별도 수수료율",
-    desc: "상품 품번별 단위 원가 (엑셀 업로드 시 5% 자동 인상), 별도 수수료율",
+    desc: "상품 품번별 등록원가 (적용원가 = 등록원가 + 5% 자동 계산), 별도 수수료율",
     icon: "🏷",
   },
   {
