@@ -40,10 +40,14 @@ function nextMonthOf(month: string): string {
 export function PendingPanel({
   sourceMonth,
   availableMonths,
+  currentRep,
+  availableReps,
   groups,
 }: {
   sourceMonth: string;
   availableMonths: string[];
+  currentRep: string;
+  availableReps: { id: string; name: string }[];
   groups: PendingGroup[];
 }) {
   const router = useRouter();
@@ -75,7 +79,7 @@ export function PendingPanel({
     );
     let supply = 0;
     let commission = 0;
-    let ids: string[] = [];
+    const ids: string[] = [];
     let groupCount = 0;
     for (const g of selectedGroupsList) {
       groupCount += 1;
@@ -86,9 +90,12 @@ export function PendingPanel({
     return { groupCount, itemCount: ids.length, supply, commission, ids };
   }, [groups, selectedGroups]);
 
-  function changeSourceMonth(m: string) {
+  function go(updates: { source?: string; rep?: string }) {
+    const next = { source: sourceMonth, rep: currentRep, ...updates };
     const params = new URLSearchParams();
-    if (m) params.set("source", m);
+    for (const [k, v] of Object.entries(next)) {
+      if (v) params.set(k, v);
+    }
     router.push(params.toString() ? `${pathname}?${params}` : pathname);
   }
 
@@ -143,32 +150,50 @@ export function PendingPanel({
         </div>
       </div>
 
-      {/* 매출월 선택 */}
-      <div className="rounded-lg border bg-white p-3">
-        <label className="flex items-center gap-3 text-sm">
-          <span className="font-medium">매출월</span>
+      {/* 매출월 / 담당자 선택 */}
+      <div className="flex flex-wrap items-end gap-4 rounded-lg border bg-white p-3 text-sm">
+        <label className="flex flex-col">
+          <span className="mb-1 text-xs font-medium text-gray-600">매출월</span>
           <select
             value={sourceMonth}
-            onChange={(e) => changeSourceMonth(e.target.value)}
+            onChange={(e) => go({ source: e.target.value })}
             className="rounded-md border px-2 py-1.5"
           >
-            {availableMonths.length === 0 && <option value="">-</option>}
+            <option value="all">전체</option>
             {availableMonths.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
             ))}
           </select>
-          <span className="text-xs text-gray-500">의 수금완료/미정산 매출</span>
         </label>
+        <label className="flex flex-col">
+          <span className="mb-1 text-xs font-medium text-gray-600">담당자</span>
+          <select
+            value={currentRep}
+            onChange={(e) => go({ rep: e.target.value })}
+            className="rounded-md border px-2 py-1.5"
+          >
+            <option value="all">전체</option>
+            <option value="unmatched">⚠ 미매칭</option>
+            {availableReps.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="pb-1.5 text-xs text-gray-500">
+          의 수금완료 · 미정산 매출
+        </span>
       </div>
 
       {/* 매출 목록 */}
       {groups.length === 0 ? (
         <div className="rounded-lg border bg-white p-10 text-center text-sm text-gray-500">
-          {sourceMonth
-            ? `${sourceMonth} 매출월에서 수금완료이면서 미정산인 거래가 없습니다.`
-            : "선택된 매출월이 없습니다."}
+          {sourceMonth === "all"
+            ? "수금완료이면서 미정산인 거래가 없습니다."
+            : `${sourceMonth} 매출월에서 수금완료이면서 미정산인 거래가 없습니다.`}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-white">
@@ -265,7 +290,9 @@ export function PendingPanel({
               className="rounded-md border px-3 py-1.5 font-mono"
             />
             <span className="mt-1 text-xs text-gray-500">
-              예: {sourceMonth} 매출은 보통 {nextMonthOf(sourceMonth)} 에 정산
+              {sourceMonth === "all"
+                ? "수수료를 지급할 정산월을 입력하세요. 예: 2026-06"
+                : `예: ${sourceMonth} 매출은 보통 ${nextMonthOf(sourceMonth)} 에 정산`}
             </span>
           </label>
 

@@ -25,8 +25,10 @@ export function SalesFilter({
   function go(updates: Record<string, string>) {
     const params = new URLSearchParams();
     const next = { month: currentMonth, rep: currentRep, collected: currentCollected, settled: currentSettled, ...updates };
+    // 기본값(매출월 all, 수금 no)과 다를 수 있으므로 값이 있으면 항상 직렬화한다.
+    // ("all" 을 생략하면 기본값으로 되돌아가 버려 '전체' 선택이 무력화됨)
     for (const [k, v] of Object.entries(next)) {
-      if (v && v !== "all") params.set(k, v);
+      if (v) params.set(k, v);
     }
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
@@ -40,7 +42,7 @@ export function SalesFilter({
           onChange={(e) => go({ month: e.target.value })}
           className="rounded-md border px-2 py-1.5"
         >
-          {months.length === 0 && <option value="">-</option>}
+          <option value="all">전체</option>
           {months.map((m) => (
             <option key={m} value={m}>
               {m}

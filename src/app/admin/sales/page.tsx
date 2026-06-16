@@ -37,9 +37,10 @@ export default async function SalesPage({
   );
   const allReps = repsRes.data ?? [];
 
-  const month = params.month ?? allMonths[0] ?? "";
+  // 초기값: 매출월 전체(all) + 미수금(no). 월 상관없이 미수금 전체를 먼저 보여준다.
+  const month = params.month ?? "all";
   const rep = params.rep ?? "all";
-  const collected = params.collected ?? "all";
+  const collected = params.collected ?? "no";
   const settled = params.settled ?? "all";
 
   let q = supabase
@@ -59,7 +60,7 @@ export default async function SalesPage({
     .order("customer")
     .order("product_code");
 
-  if (month) q = q.eq("sales_month", month);
+  if (month && month !== "all") q = q.eq("sales_month", month);
   if (rep === "unmatched") q = q.is("rep_id", null);
   else if (rep !== "all") q = q.eq("rep_id", rep);
   if (collected === "yes") q = q.eq("is_collected", true);
