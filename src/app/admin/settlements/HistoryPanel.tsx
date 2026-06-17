@@ -71,6 +71,8 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
                 <th className="px-3 py-2">담당자</th>
                 <th className="px-3 py-2 text-right w-24">건수</th>
                 <th className="px-3 py-2 text-right w-36">공급가 합계</th>
+                <th className="px-3 py-2 text-right w-32">부가세</th>
+                <th className="px-3 py-2 text-right w-36">합계</th>
                 <th className="px-3 py-2 text-right w-36">수수료 합계</th>
                 <th className="px-3 py-2 w-40">확정일시</th>
                 <th className="px-3 py-2 w-24">상세</th>
@@ -91,6 +93,12 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
                     <td className="px-3 py-2 text-right">{r.sales_count}</td>
                     <td className="px-3 py-2 text-right">
                       {formatKRW(r.total_supply)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {formatKRW(r.total_supply / 10)}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {formatKRW(r.total_supply + r.total_supply / 10)}
                     </td>
                     <td className="px-3 py-2 text-right font-medium text-blue-700">
                       {formatKRW(r.total_commission)}
