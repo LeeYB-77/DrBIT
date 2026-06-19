@@ -65,20 +65,20 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-white">
-          <table className="w-full text-sm">
+          <table className="min-w-full whitespace-nowrap text-sm">
             <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-3 py-2 w-28">정산월</th>
+                <th className="px-3 py-2">정산월</th>
                 <th className="px-3 py-2">담당자</th>
-                <th className="px-3 py-2 text-right w-24">건수</th>
-                <th className="px-3 py-2 text-right w-36">공급가 합계</th>
-                <th className="px-3 py-2 text-right w-32">부가세</th>
-                <th className="px-3 py-2 text-right w-36">합계</th>
-                <th className="px-3 py-2 text-right w-32">카드수수료</th>
-                <th className="px-3 py-2 text-right w-36">정산수수료</th>
-                <th className="px-3 py-2 w-40">확정일시</th>
-                <th className="px-3 py-2 w-24">상세</th>
-                <th className="px-3 py-2 w-24">취소</th>
+                <th className="px-3 py-2 text-right">건수</th>
+                <th className="px-3 py-2 text-right">공급가 합계</th>
+                <th className="px-3 py-2 text-right">부가세</th>
+                <th className="px-3 py-2 text-right">합계</th>
+                <th className="px-3 py-2 text-right">카드수수료</th>
+                <th className="px-3 py-2 text-right">정산수수료</th>
+                <th className="px-3 py-2">확정일시</th>
+                <th className="px-3 py-2 text-center">상세</th>
+                <th className="px-3 py-2 text-center">취소</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -115,7 +115,7 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
                         hour12: false,
                       })}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-center">
                       <Link
                         href={`/admin/settlements/${r.id}`}
                         className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1 text-xs text-blue-700 hover:bg-blue-100"
@@ -123,7 +123,7 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
                         상세보기
                       </Link>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-center">
                       <button
                         type="button"
                         onClick={() => onCancel(r)}
