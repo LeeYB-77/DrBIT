@@ -14,6 +14,12 @@ const SETTINGS_CARDS = [
     icon: "🏷",
   },
   {
+    href: "/admin/card-fee",
+    title: "카드수수료율",
+    desc: "카드 수금분의 카드수수료율(결제총액 × 율). 정산수수료에서 차감",
+    icon: "💳",
+  },
+  {
     href: "/admin/reps",
     title: "담당자 관리",
     desc: "담당자 등록, 역할·활성, 삭제",
