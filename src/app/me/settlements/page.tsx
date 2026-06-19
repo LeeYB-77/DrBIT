@@ -78,7 +78,7 @@ export default async function MySettlementsPage() {
       <div>
         <h1 className="text-2xl font-bold">내 정산 내역</h1>
         <p className="mt-1 text-sm text-gray-500">
-          {profile.name}님의 월별 정산 수수료. 기본은 이번 달({current})과 다음
+          {(profile as { agency_name?: string | null }).agency_name ?? profile.name}님의 월별 정산 수수료. 기본은 이번 달({current})과 다음
           달({next}) 정산 내역을 표시합니다.
         </p>
       </div>
@@ -88,7 +88,7 @@ export default async function MySettlementsPage() {
         allSales={allSales}
         currentMonth={current}
         nextMonth={next}
-        repName={profile.name}
+        repName={(profile as { agency_name?: string | null }).agency_name ?? profile.name}
       />
     </div>
   );

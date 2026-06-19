@@ -20,14 +20,17 @@ export default async function SettlementsPage({
       .order("sales_month", { ascending: false }),
     supabase
       .from("profiles")
-      .select("id, name, active")
+      .select("id, name, agency_name, active")
       .eq("active", true)
       .order("name"),
   ]);
   const allMonths = Array.from(
     new Set((monthsRes.data ?? []).map((r) => r.sales_month)),
   );
-  const allReps = (repsRes.data ?? []).map((r) => ({ id: r.id, name: r.name }));
+  const allReps = (repsRes.data ?? []).map((r) => ({
+    id: r.id,
+    name: r.agency_name ?? r.name,
+  }));
 
   // 초기값: 매출월 전체(all). 월 상관없이 정산 대상 전체를 보여준다.
   const sourceMonth = source ?? "all";
@@ -41,7 +44,7 @@ export default async function SettlementsPage({
       id, sales_month, closing_date, customer, product_code, product_name,
       quantity, supply_amount, commission_amount, card_fee,
       rep_id, rep_name_raw,
-      profiles:rep_id ( name )
+      profiles:rep_id ( name, agency_name )
     `,
     )
     .eq("is_collected", true)
@@ -66,8 +69,8 @@ export default async function SettlementsPage({
   for (const r of pending ?? []) {
     const key = `${r.customer}__${r.closing_date}`;
     let g = map.get(key);
-    const repName =
-      (r.profiles as { name?: string } | null)?.name ?? r.rep_name_raw;
+    const prof = r.profiles as { name?: string; agency_name?: string | null } | null;
+    const repName = prof?.agency_name ?? prof?.name ?? r.rep_name_raw;
     if (!g) {
       g = {
         key,
@@ -107,7 +110,7 @@ export default async function SettlementsPage({
   const { data: history } = await supabase
     .from("settlements")
     .select(
-      "id, settlement_month, rep_id, total_supply_amount, total_commission, total_card_fee, sales_count, finalized_at, profiles:rep_id ( name )",
+      "id, settlement_month, rep_id, total_supply_amount, total_commission, total_card_fee, sales_count, finalized_at, profiles:rep_id ( name, agency_name )",
     )
     .order("settlement_month", { ascending: false })
     .order("finalized_at", { ascending: false });
@@ -116,7 +119,10 @@ export default async function SettlementsPage({
     id: r.id,
     settlement_month: r.settlement_month,
     rep_id: r.rep_id,
-    rep_name: (r.profiles as { name?: string } | null)?.name ?? "(미상)",
+    rep_name: (() => {
+      const p = r.profiles as { name?: string; agency_name?: string | null } | null;
+      return p?.agency_name ?? p?.name ?? "(미상)";
+    })(),
     total_supply: Number(r.total_supply_amount),
     total_commission: Number(r.total_commission),
     total_card_fee: Number(r.total_card_fee ?? 0),

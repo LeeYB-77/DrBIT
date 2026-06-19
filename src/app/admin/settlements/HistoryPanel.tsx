@@ -69,7 +69,7 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
             <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-3 py-2">정산월</th>
-                <th className="px-3 py-2">담당자</th>
+                <th className="px-3 py-2">대리점</th>
                 <th className="px-3 py-2 text-right">건수</th>
                 <th className="px-3 py-2 text-right">공급가 합계</th>
                 <th className="px-3 py-2 text-right">부가세</th>

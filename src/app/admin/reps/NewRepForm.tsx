@@ -36,11 +36,16 @@ export function NewRepForm() {
       <div className="text-sm font-medium">신규 담당자 등록</div>
 
       <form id="new-rep-form" action={onSubmit}>
-        <div className="grid gap-3 sm:grid-cols-[1fr_2fr_auto_auto]">
+        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto_auto]">
           <input
             name="name"
             required
             placeholder="이름 (예: 박상수)"
+            className="rounded-md border px-3 py-2 text-sm outline-none focus:border-blue-500"
+          />
+          <input
+            name="agency_name"
+            placeholder="대리점명 (선택)"
             className="rounded-md border px-3 py-2 text-sm outline-none focus:border-blue-500"
           />
           <input

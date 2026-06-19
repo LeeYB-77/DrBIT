@@ -8,7 +8,7 @@ export default async function RepsPage() {
   const supabase = await createClient();
   const { data: reps, error } = await supabase
     .from("profiles")
-    .select("id, name, email, role, active, created_at")
+    .select("id, name, agency_name, email, role, active, created_at")
     .order("role", { ascending: true })
     .order("name", { ascending: true });
 

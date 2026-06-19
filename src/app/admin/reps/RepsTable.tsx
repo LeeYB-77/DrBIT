@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import {
   deleteRep,
   toggleRepActive,
+  updateRepAgencyName,
+  updateRepEmail,
   updateRepName,
   updateRepRole,
 } from "./actions";
@@ -11,6 +13,7 @@ import {
 type Rep = {
   id: string;
   name: string;
+  agency_name: string | null;
   email: string | null;
   role: "admin" | "rep";
   active: boolean;
@@ -32,7 +35,8 @@ export function RepsTable({ reps }: { reps: Rep[] }) {
         <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
           <tr>
             <th className="px-4 py-3">이름 (엑셀 매칭 키)</th>
-            <th className="px-4 py-3">이메일</th>
+            <th className="px-4 py-3">대리점명</th>
+            <th className="px-4 py-3">이메일 (로그인 ID)</th>
             <th className="px-4 py-3 w-32">역할</th>
             <th className="px-4 py-3 w-24">상태</th>
             <th className="px-4 py-3 w-20">삭제</th>
@@ -50,6 +54,8 @@ export function RepsTable({ reps }: { reps: Rep[] }) {
 
 function RepRow({ rep }: { rep: Rep }) {
   const [name, setName] = useState(rep.name);
+  const [agencyName, setAgencyName] = useState(rep.agency_name ?? "");
+  const [email, setEmail] = useState(rep.email ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -61,6 +67,30 @@ function RepRow({ rep }: { rep: Rep }) {
       if (!result.ok) {
         setError(result.error);
         setName(rep.name);
+      }
+    });
+  }
+
+  function saveAgencyName() {
+    if (agencyName === (rep.agency_name ?? "")) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await updateRepAgencyName(rep.id, agencyName);
+      if (!result.ok) {
+        setError(result.error);
+        setAgencyName(rep.agency_name ?? "");
+      }
+    });
+  }
+
+  function saveEmail() {
+    if (email === (rep.email ?? "")) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await updateRepEmail(rep.id, email);
+      if (!result.ok) {
+        setError(result.error);
+        setEmail(rep.email ?? "");
       }
     });
   }
@@ -107,7 +137,24 @@ function RepRow({ rep }: { rep: Rep }) {
         />
         {error && <div className="mt-1 text-xs text-red-600">{error}</div>}
       </td>
-      <td className="px-4 py-2 text-gray-600">{rep.email ?? "-"}</td>
+      <td className="px-4 py-2">
+        <input
+          value={agencyName}
+          onChange={(e) => setAgencyName(e.target.value)}
+          onBlur={saveAgencyName}
+          placeholder="대리점명 입력"
+          className="w-full rounded-md border border-transparent px-2 py-1 hover:border-gray-300 focus:border-blue-500 focus:outline-none text-gray-700"
+        />
+      </td>
+      <td className="px-4 py-2">
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onBlur={saveEmail}
+          type="email"
+          className="w-full rounded-md border border-transparent px-2 py-1 hover:border-gray-300 focus:border-blue-500 focus:outline-none text-gray-600"
+        />
+      </td>
       <td className="px-4 py-2">
         <select
           value={rep.role}

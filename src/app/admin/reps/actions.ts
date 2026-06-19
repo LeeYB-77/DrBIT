@@ -22,6 +22,7 @@ export async function createRep(formData: FormData): Promise<CreateRepResult> {
 
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const agencyName = String(formData.get("agency_name") ?? "").trim() || null;
   const role = (String(formData.get("role") ?? "rep") === "admin"
     ? "admin"
     : "rep") as "admin" | "rep";
@@ -55,6 +56,7 @@ export async function createRep(formData: FormData): Promise<CreateRepResult> {
     id: userId,
     name,
     email,
+    agency_name: agencyName,
     role,
     active: true,
   });
@@ -82,6 +84,50 @@ function generateTempPassword(): string {
     out += chars[idx];
   }
   return out;
+}
+
+export async function updateRepAgencyName(
+  id: string,
+  agencyName: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const trimmed = agencyName.trim() || null;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ agency_name: trimmed })
+    .eq("id", id);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/reps");
+  return { ok: true };
+}
+
+export async function updateRepEmail(
+  id: string,
+  email: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed || !trimmed.includes("@"))
+    return { ok: false, error: "올바른 이메일을 입력하세요." };
+
+  const admin = createAdminClient();
+  const { error: authErr } = await admin.auth.admin.updateUserById(id, {
+    email: trimmed,
+    email_confirm: true,
+  });
+  if (authErr) return { ok: false, error: `Auth 수정 실패: ${authErr.message}` };
+
+  const { error: profileErr } = await admin
+    .from("profiles")
+    .update({ email: trimmed })
+    .eq("id", id);
+  if (profileErr) return { ok: false, error: profileErr.message };
+
+  revalidatePath("/admin/reps");
+  return { ok: true };
 }
 
 export async function updateRepName(

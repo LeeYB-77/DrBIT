@@ -168,7 +168,7 @@ export function PendingPanel({
           </select>
         </label>
         <label className="flex flex-col">
-          <span className="mb-1 text-xs font-medium text-gray-600">담당자</span>
+          <span className="mb-1 text-xs font-medium text-gray-600">대리점</span>
           <select
             value={currentRep}
             onChange={(e) => go({ rep: e.target.value })}
@@ -208,7 +208,7 @@ export function PendingPanel({
                     disabled={togglable.length === 0}
                   />
                 </th>
-                <th className="px-2 py-2">담당자</th>
+                <th className="px-2 py-2">대리점</th>
                 <th className="px-2 py-2">고객</th>
                 <th className="px-2 py-2">마감일자</th>
                 <th className="px-2 py-2 text-right">품번 수</th>

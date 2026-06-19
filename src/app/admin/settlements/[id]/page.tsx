@@ -21,7 +21,7 @@ export default async function SettlementDetailPage({
       id, settlement_month, rep_id,
       total_supply_amount, total_commission, sales_count,
       finalized_at,
-      profiles:rep_id ( name, email )
+      profiles:rep_id ( name, agency_name, email )
     `,
     )
     .eq("id", id)
@@ -35,10 +35,9 @@ export default async function SettlementDetailPage({
     );
   if (!settlement) notFound();
 
-  const repName =
-    (settlement.profiles as { name?: string } | null)?.name ?? "(미상)";
-  const repEmail =
-    (settlement.profiles as { email?: string } | null)?.email ?? "-";
+  const prof = settlement.profiles as { name?: string; agency_name?: string | null; email?: string } | null;
+  const repName = prof?.agency_name ?? prof?.name ?? "(미상)";
+  const repEmail = prof?.email ?? "-";
 
   // 해당 정산월 + 담당자의 매출 매기 행 조회
   const { data: sales } = await supabase
