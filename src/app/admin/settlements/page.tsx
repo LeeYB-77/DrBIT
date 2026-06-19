@@ -42,7 +42,7 @@ export default async function SettlementsPage({
     .select(
       `
       id, sales_month, closing_date, customer, product_code, product_name,
-      quantity, supply_amount, commission_amount, card_fee,
+      quantity, supply_amount, vat, total_amount, commission_amount, card_fee,
       rep_id, rep_name_raw,
       profiles:rep_id ( name, agency_name )
     `,
@@ -81,6 +81,7 @@ export default async function SettlementsPage({
         rep_matched: !!r.rep_id,
         item_count: 0,
         total_supply: 0,
+        total_amount: 0,
         total_commission: 0,
         items: [],
       };
@@ -98,6 +99,7 @@ export default async function SettlementsPage({
     });
     g.item_count += 1;
     g.total_supply += Number(r.supply_amount);
+    g.total_amount += Number(r.total_amount ?? 0);
     g.total_commission += net;
   }
   const pendingGroups: PendingGroup[] = Array.from(map.values()).sort((a, b) => {

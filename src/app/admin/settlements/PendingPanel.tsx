@@ -23,6 +23,7 @@ export type PendingGroup = {
   rep_matched: boolean;
   item_count: number;
   total_supply: number;
+  total_amount: number;
   total_commission: number;
   items: PendingItem[];
 };
@@ -78,16 +79,18 @@ export function PendingPanel({
       selectedGroups.has(g.key),
     );
     let supply = 0;
+    let amount = 0;
     let commission = 0;
     const ids: string[] = [];
     let groupCount = 0;
     for (const g of selectedGroupsList) {
       groupCount += 1;
       supply += g.total_supply;
+      amount += g.total_amount;
       commission += g.total_commission;
       ids.push(...g.items.map((i) => i.id));
     }
-    return { groupCount, itemCount: ids.length, supply, commission, ids };
+    return { groupCount, itemCount: ids.length, supply, amount, commission, ids };
   }, [groups, selectedGroups]);
 
   function go(updates: { source?: string; rep?: string }) {
@@ -214,6 +217,7 @@ export function PendingPanel({
                 <th className="px-2 py-2 text-right">품번 수</th>
                 <th className="px-2 py-2 text-right">수량</th>
                 <th className="px-2 py-2 text-right">공급가</th>
+                <th className="px-2 py-2 text-right">합계</th>
                 <th className="px-2 py-2 text-right">정산수수료</th>
               </tr>
             </thead>
@@ -267,6 +271,9 @@ export function PendingPanel({
                     <td className="px-2 py-1 text-right">
                       {formatKRW(g.total_supply)}
                     </td>
+                    <td className="px-2 py-1 text-right text-gray-600">
+                      {formatKRW(g.total_amount)}
+                    </td>
                     <td className="px-2 py-1 text-right">
                       {formatKRW(g.total_commission)}
                     </td>
@@ -302,7 +309,11 @@ export function PendingPanel({
             <div className="text-gray-500">선택 합계</div>
             <div className="text-base font-semibold">
               {selectedSummary.groupCount} 거래 / {selectedSummary.itemCount}{" "}
-              품번 · 공급가 {formatKRW(selectedSummary.supply)} · 정산수수료{" "}
+              품번 · 공급가 {formatKRW(selectedSummary.supply)} · 합계{" "}
+              <span className="text-gray-700">
+                {formatKRW(selectedSummary.amount)}
+              </span>{" "}
+              · 정산수수료{" "}
               <span className="text-blue-700">
                 {formatKRW(selectedSummary.commission)}
               </span>
