@@ -214,7 +214,7 @@ export function PendingPanel({
                 <th className="px-2 py-2 text-right">품번 수</th>
                 <th className="px-2 py-2 text-right">수량</th>
                 <th className="px-2 py-2 text-right">공급가</th>
-                <th className="px-2 py-2 text-right">수수료</th>
+                <th className="px-2 py-2 text-right">정산수수료</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -302,7 +302,7 @@ export function PendingPanel({
             <div className="text-gray-500">선택 합계</div>
             <div className="text-base font-semibold">
               {selectedSummary.groupCount} 거래 / {selectedSummary.itemCount}{" "}
-              품번 · 공급가 {formatKRW(selectedSummary.supply)} · 수수료{" "}
+              품번 · 공급가 {formatKRW(selectedSummary.supply)} · 정산수수료{" "}
               <span className="text-blue-700">
                 {formatKRW(selectedSummary.commission)}
               </span>

@@ -16,6 +16,8 @@ export type DetailItem = {
   supply: number;
   vat: number;
   total: number;
+  payment_method: "cash" | "card";
+  card_fee: number;
   cost_per_unit: number;
   cost_amount: number;
   profit: number;
@@ -34,17 +36,16 @@ const HEADERS = [
   "공급가",
   "부가세",
   "합계",
-  "단위당 원가",
-  "원가 합계",
-  "수익",
-  "수수료율(%)",
   "수수료",
+  "결제",
+  "카드수수료",
+  "정산수수료",
 ] as const;
 
-const COL_WIDTHS = [12, 24, 10, 16, 22, 6, 12, 12, 12, 14, 12, 12, 12, 10, 12];
+const COL_WIDTHS = [12, 24, 10, 16, 22, 6, 12, 12, 12, 14, 12, 8, 12, 12];
 
-// 천 단위 콤마를 적용할 숫자 컬럼 인덱스 (수량 + 금액들). 수수료율(13)은 제외.
-const NUMERIC_COLS = new Set([5, 6, 7, 8, 9, 10, 11, 12, 14]);
+// 천 단위 콤마를 적용할 숫자 컬럼 인덱스 (수량 + 금액들). 결제(11)는 제외.
+const NUMERIC_COLS = new Set([5, 6, 7, 8, 9, 10, 12, 13]);
 const NUM_FMT = "#,##0";
 
 // ── 스타일 정의 ─────────────────────────────────────────────
@@ -113,11 +114,10 @@ export function SettlementDetailDownload({
       i.supply,
       i.vat,
       i.total,
-      i.cost_per_unit,
-      i.cost_amount,
-      i.profit,
-      Number((i.rate * 100).toFixed(2)),
       i.commission,
+      i.payment_method === "card" ? "카드" : "현금",
+      i.card_fee,
+      i.commission - i.card_fee,
     ]);
 
     const totals = items.reduce(
@@ -126,14 +126,14 @@ export function SettlementDetailDownload({
         supply: acc.supply + c.supply,
         vat: acc.vat + c.vat,
         total: acc.total + c.total,
-        cost: acc.cost + c.cost_amount,
-        profit: acc.profit + c.profit,
         comm: acc.comm + c.commission,
+        cardFee: acc.cardFee + c.card_fee,
+        net: acc.net + (c.commission - c.card_fee),
       }),
-      { qty: 0, supply: 0, vat: 0, total: 0, cost: 0, profit: 0, comm: 0 },
+      { qty: 0, supply: 0, vat: 0, total: 0, comm: 0, cardFee: 0, net: 0 },
     );
 
-    // 합계행: 단가/단위당 원가/수수료율은 빈칸
+    // 합계행: 단가/결제는 빈칸
     const totalRow = [
       "",
       "합계",
@@ -145,11 +145,10 @@ export function SettlementDetailDownload({
       totals.supply,
       totals.vat,
       totals.total,
-      "",
-      totals.cost,
-      totals.profit,
-      "",
       totals.comm,
+      "",
+      totals.cardFee,
+      totals.net,
     ];
 
     const aoa = [HEADERS as unknown as (string | number)[], ...dataRows, totalRow];

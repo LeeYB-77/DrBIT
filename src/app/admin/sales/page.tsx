@@ -51,7 +51,7 @@ export default async function SalesPage({
       product_code, product_name, quantity, unit_price,
       supply_amount, vat, total_amount, project,
       rep_id, rep_name_raw,
-      is_collected, collected_at,
+      is_collected, collected_at, payment_method,
       settlement_month, commission_amount,
       profiles:rep_id ( name )
     `,
@@ -95,6 +95,7 @@ export default async function SalesPage({
     rep_matched: !!r.rep_id,
     is_collected: r.is_collected,
     collected_at: r.collected_at,
+    payment_method: (r.payment_method ?? "cash") as "cash" | "card",
     settlement_month: r.settlement_month,
     commission_amount:
       r.commission_amount === null ? null : Number(r.commission_amount),
@@ -120,6 +121,7 @@ export default async function SalesPage({
         total_commission: 0,
         items: [],
         is_collected: "none",
+        payment_method: null,
         settlement_month: null,
       };
       groupMap.set(key, g);
@@ -133,10 +135,20 @@ export default async function SalesPage({
 
   // 그룹별 수금/정산 상태 결정
   for (const g of groupMap.values()) {
-    const collectedCnt = g.items.filter((i) => i.is_collected).length;
+    const collectedItems = g.items.filter((i) => i.is_collected);
+    const collectedCnt = collectedItems.length;
     if (collectedCnt === g.items.length) g.is_collected = "all";
     else if (collectedCnt === 0) g.is_collected = "none";
     else g.is_collected = "partial";
+
+    // 수금된 행의 결제수단(현금/카드). 섞여 있으면 mixed, 미수금이면 null.
+    const methods = new Set(collectedItems.map((i) => i.payment_method));
+    g.payment_method =
+      methods.size === 0
+        ? null
+        : methods.size === 1
+          ? (collectedItems[0].payment_method as "cash" | "card")
+          : "mixed";
 
     const months = new Set(g.items.map((i) => i.settlement_month));
     if (months.size === 1) g.settlement_month = g.items[0].settlement_month;

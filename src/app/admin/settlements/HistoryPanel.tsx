@@ -12,6 +12,7 @@ export type HistoryRow = {
   rep_name: string;
   total_supply: number;
   total_commission: number;
+  total_card_fee: number;
   sales_count: number;
   finalized_at: string;
 };
@@ -27,7 +28,7 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
       return;
     }
     const confirmed = window.confirm(
-      `${row.rep_name}님의 ${row.settlement_month} 정산을 취소하시겠어요?\n\n수수료: ${formatKRW(row.total_commission)} (${row.sales_count}건)\n\n해당 매출들은 다시 '미정산' 상태가 되며 현재 수수료율로 재계산됩니다.`,
+      `${row.rep_name}님의 ${row.settlement_month} 정산을 취소하시겠어요?\n\n정산수수료: ${formatKRW(row.total_commission - row.total_card_fee)} (${row.sales_count}건)\n\n해당 매출들은 다시 '미정산' 상태가 되며 현재 수수료율로 재계산됩니다.`,
     );
     if (!confirmed) return;
 
@@ -73,7 +74,8 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
                 <th className="px-3 py-2 text-right w-36">공급가 합계</th>
                 <th className="px-3 py-2 text-right w-32">부가세</th>
                 <th className="px-3 py-2 text-right w-36">합계</th>
-                <th className="px-3 py-2 text-right w-36">수수료 합계</th>
+                <th className="px-3 py-2 text-right w-32">카드수수료</th>
+                <th className="px-3 py-2 text-right w-36">정산수수료</th>
                 <th className="px-3 py-2 w-40">확정일시</th>
                 <th className="px-3 py-2 w-24">상세</th>
                 <th className="px-3 py-2 w-24">취소</th>
@@ -100,8 +102,13 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
                     <td className="px-3 py-2 text-right">
                       {formatKRW(r.total_supply + r.total_supply / 10)}
                     </td>
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {r.total_card_fee > 0
+                        ? `-${formatKRW(r.total_card_fee)}`
+                        : "-"}
+                    </td>
                     <td className="px-3 py-2 text-right font-medium text-blue-700">
-                      {formatKRW(r.total_commission)}
+                      {formatKRW(r.total_commission - r.total_card_fee)}
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-500">
                       {new Date(r.finalized_at).toLocaleString("ko-KR", {

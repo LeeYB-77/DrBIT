@@ -26,7 +26,7 @@ export default async function MySettlementsPage() {
     supabase
       .from("settlements")
       .select(
-        "id, settlement_month, total_supply_amount, total_commission, sales_count, finalized_at",
+        "id, settlement_month, total_supply_amount, total_commission, total_card_fee, sales_count, finalized_at",
       )
       .eq("rep_id", profile.id)
       .order("settlement_month", { ascending: false }),
@@ -35,8 +35,8 @@ export default async function MySettlementsPage() {
       .select(
         `
         id, settlement_month, closing_date, customer, product_code, product_name,
-        quantity, supply_amount, cost_per_unit, cost_amount, profit_amount,
-        commission_rate_snapshot, commission_amount
+        quantity, supply_amount, vat, total_amount,
+        payment_method, card_fee, commission_amount
       `,
       )
       .eq("rep_id", profile.id)
@@ -50,6 +50,7 @@ export default async function MySettlementsPage() {
     settlement_month: s.settlement_month,
     total_supply: Number(s.total_supply_amount),
     total_commission: Number(s.total_commission),
+    total_card_fee: Number(s.total_card_fee ?? 0),
     sales_count: s.sales_count,
     finalized_at: s.finalized_at,
   }));
@@ -63,10 +64,10 @@ export default async function MySettlementsPage() {
     product_name: s.product_name,
     quantity: s.quantity,
     supply: Number(s.supply_amount),
-    cost_per_unit: Number(s.cost_per_unit ?? 0),
-    cost_amount: Number(s.cost_amount ?? 0),
-    profit: Number(s.profit_amount ?? s.supply_amount),
-    rate: Number(s.commission_rate_snapshot ?? 0),
+    vat: Number(s.vat ?? 0),
+    total: Number(s.total_amount ?? 0),
+    payment_method: (s.payment_method ?? "cash") as "cash" | "card",
+    card_fee: Number(s.card_fee ?? 0),
     commission: Number(s.commission_amount ?? 0),
   }));
 

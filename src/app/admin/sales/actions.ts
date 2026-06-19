@@ -6,9 +6,12 @@ import { revalidatePath } from "next/cache";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
+export type PaymentMethod = "cash" | "card";
+
 export async function toggleSaleCollected(
   id: string,
   collected: boolean,
+  paymentMethod: PaymentMethod = "cash",
 ): Promise<ActionResult> {
   const profile = await requireAdmin();
   const supabase = await createClient();
@@ -33,6 +36,8 @@ export async function toggleSaleCollected(
       is_collected: collected,
       collected_at: collected ? new Date().toISOString() : null,
       collected_by: collected ? profile.id : null,
+      // 수금 취소 시 결제수단을 현금으로 되돌려 카드수수료를 0으로 재계산
+      payment_method: collected ? paymentMethod : "cash",
     })
     .eq("id", id);
 
@@ -44,6 +49,7 @@ export async function toggleSaleCollected(
 export async function bulkToggleCollected(
   ids: string[],
   collected: boolean,
+  paymentMethod: PaymentMethod = "cash",
 ): Promise<{ ok: true; affected: number } | { ok: false; error: string }> {
   const profile = await requireAdmin();
   const supabase = await createClient();
@@ -57,6 +63,7 @@ export async function bulkToggleCollected(
         is_collected: collected,
         collected_at: collected ? new Date().toISOString() : null,
         collected_by: collected ? profile.id : null,
+        payment_method: collected ? paymentMethod : "cash",
       },
       { count: "exact" },
     )

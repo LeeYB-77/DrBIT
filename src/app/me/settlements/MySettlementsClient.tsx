@@ -9,6 +9,7 @@ export type SettlementSummary = {
   settlement_month: string;
   total_supply: number;
   total_commission: number;
+  total_card_fee: number;
   sales_count: number;
   finalized_at: string;
 };
@@ -22,12 +23,17 @@ export type SaleItem = {
   product_name: string;
   quantity: number;
   supply: number;
-  cost_per_unit: number;
-  cost_amount: number;
-  profit: number;
-  rate: number;
+  vat: number;
+  total: number;
+  payment_method: "cash" | "card";
+  card_fee: number;
   commission: number;
 };
+
+// 정산수수료(순액) = 수수료 − 카드수수료
+function netCommission(i: SaleItem): number {
+  return i.commission - i.card_fee;
+}
 
 const DEFAULT_VIEW = "__default__"; // 현재월+다음달
 
@@ -66,7 +72,9 @@ export function MySettlementsClient({
         return {
           month,
           total_supply: s?.total_supply ?? 0,
-          total_commission: s?.total_commission ?? 0,
+          // 정산수수료(순액) = 수수료 − 카드수수료
+          total_commission: (s?.total_commission ?? 0) - (s?.total_card_fee ?? 0),
+          total_card_fee: s?.total_card_fee ?? 0,
           sales_count: s?.sales_count ?? 0,
           finalized_at: s?.finalized_at ?? null,
           has_data: !!s,
@@ -87,29 +95,30 @@ export function MySettlementsClient({
       품번: i.product_code,
       품명: i.product_name,
       수량: i.quantity,
-      "단위당 원가": i.cost_per_unit,
-      "원가 합계": i.cost_amount,
       공급가: i.supply,
-      수익: i.profit,
-      "수수료율(%)": Number((i.rate * 100).toFixed(2)),
-      수수료: i.commission,
+      부가세: i.vat,
+      합계: i.total,
+      결제: i.payment_method === "card" ? "카드" : "현금",
+      카드수수료: i.card_fee,
+      정산수수료: netCommission(i),
     }));
     const totalSupply = items.reduce((a, c) => a + c.supply, 0);
-    const totalCost = items.reduce((a, c) => a + c.cost_amount, 0);
-    const totalProfit = items.reduce((a, c) => a + c.profit, 0);
-    const totalCommission = items.reduce((a, c) => a + c.commission, 0);
+    const totalVat = items.reduce((a, c) => a + c.vat, 0);
+    const totalTotal = items.reduce((a, c) => a + c.total, 0);
+    const totalCardFee = items.reduce((a, c) => a + c.card_fee, 0);
+    const totalNet = items.reduce((a, c) => a + netCommission(c), 0);
     data.push({
       마감일자: "",
       고객: "합계",
       품번: "",
       품명: "",
       수량: items.reduce((a, c) => a + c.quantity, 0),
-      "단위당 원가": "" as unknown as number,
-      "원가 합계": totalCost,
       공급가: totalSupply,
-      수익: totalProfit,
-      "수수료율(%)": "" as unknown as number,
-      수수료: totalCommission,
+      부가세: totalVat,
+      합계: totalTotal,
+      결제: "" as unknown as string,
+      카드수수료: totalCardFee,
+      정산수수료: totalNet,
     });
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -123,8 +132,8 @@ export function MySettlementsClient({
       { wch: 12 },
       { wch: 12 },
       { wch: 12 },
+      { wch: 6 },
       { wch: 12 },
-      { wch: 10 },
       { wch: 12 },
     ];
     const wb = XLSX.utils.book_new();
@@ -190,9 +199,15 @@ export function MySettlementsClient({
               <div className="mt-2 text-sm text-gray-500">
                 {c.sales_count}건 · 공급가 {formatKRW(c.total_supply)}
               </div>
-              <div className="mt-1 text-xl font-bold text-blue-700">
+              <div className="mt-1 text-xs text-gray-400">정산수수료</div>
+              <div className="text-xl font-bold text-blue-700">
                 {formatKRW(c.total_commission)}
               </div>
+              {c.total_card_fee > 0 && (
+                <div className="mt-0.5 text-xs text-gray-400">
+                  카드수수료 {formatKRW(c.total_card_fee)} 차감 후
+                </div>
+              )}
               {!c.has_data && (
                 <div className="mt-1 text-xs text-gray-400">정산 없음</div>
               )}
@@ -206,7 +221,9 @@ export function MySettlementsClient({
         const items = allSales.filter((s) => s.settlement_month === month);
         if (items.length === 0) return null;
         const totalSupply = items.reduce((a, c) => a + c.supply, 0);
-        const totalCommission = items.reduce((a, c) => a + c.commission, 0);
+        const totalVat = items.reduce((a, c) => a + c.vat, 0);
+        const totalCardFee = items.reduce((a, c) => a + c.card_fee, 0);
+        const totalNet = items.reduce((a, c) => a + netCommission(c), 0);
         return (
           <section key={month} id={`m-${month}`} className="space-y-2">
             <div className="flex items-end justify-between">
@@ -218,8 +235,11 @@ export function MySettlementsClient({
               </h2>
               <div className="flex items-center gap-3 text-xs text-gray-500">
                 <span>
-                  {items.length}건 · 공급가 {formatKRW(totalSupply)} · 수수료{" "}
-                  <b className="text-blue-700">{formatKRW(totalCommission)}</b>
+                  {items.length}건 · 공급가 {formatKRW(totalSupply)} · 부가세{" "}
+                  {formatKRW(totalVat)}
+                  {totalCardFee > 0 && <> · 카드수수료 {formatKRW(totalCardFee)}</>}{" "}
+                  · 정산수수료{" "}
+                  <b className="text-blue-700">{formatKRW(totalNet)}</b>
                 </span>
                 <button
                   type="button"
@@ -240,10 +260,11 @@ export function MySettlementsClient({
                     <th className="px-2 py-2">품명</th>
                     <th className="px-2 py-2 text-right">수량</th>
                     <th className="px-2 py-2 text-right">공급가</th>
-                    <th className="px-2 py-2 text-right">원가</th>
-                    <th className="px-2 py-2 text-right">수익</th>
-                    <th className="px-2 py-2 text-right">수수료율</th>
-                    <th className="px-2 py-2 text-right">수수료</th>
+                    <th className="px-2 py-2 text-right">부가세</th>
+                    <th className="px-2 py-2 text-right">합계</th>
+                    <th className="px-2 py-2 text-center">결제</th>
+                    <th className="px-2 py-2 text-right">카드수수료</th>
+                    <th className="px-2 py-2 text-right">정산수수료</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -263,16 +284,27 @@ export function MySettlementsClient({
                         {formatKRW(i.supply)}
                       </td>
                       <td className="px-2 py-1 text-right text-gray-500">
-                        {i.cost_amount > 0 ? formatKRW(i.cost_amount) : "-"}
+                        {formatKRW(i.vat)}
                       </td>
                       <td className="px-2 py-1 text-right">
-                        {formatKRW(i.profit)}
+                        {formatKRW(i.total)}
+                      </td>
+                      <td className="px-2 py-1 text-center">
+                        {i.payment_method === "card" ? (
+                          <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] text-purple-700">
+                            카드
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
+                            현금
+                          </span>
+                        )}
                       </td>
                       <td className="px-2 py-1 text-right text-gray-500">
-                        {(i.rate * 100).toFixed(2)}%
+                        {i.card_fee > 0 ? `-${formatKRW(i.card_fee)}` : "-"}
                       </td>
                       <td className="px-2 py-1 text-right font-medium text-blue-700">
-                        {formatKRW(i.commission)}
+                        {formatKRW(netCommission(i))}
                       </td>
                     </tr>
                   ))}

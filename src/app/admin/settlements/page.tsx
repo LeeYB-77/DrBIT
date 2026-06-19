@@ -39,7 +39,7 @@ export default async function SettlementsPage({
     .select(
       `
       id, sales_month, closing_date, customer, product_code, product_name,
-      quantity, supply_amount, commission_amount,
+      quantity, supply_amount, commission_amount, card_fee,
       rep_id, rep_name_raw,
       profiles:rep_id ( name )
     `,
@@ -83,17 +83,19 @@ export default async function SettlementsPage({
       };
       map.set(key, g);
     }
+    // 정산수수료(순액) = 수수료 − 카드수수료
+    const net = Number(r.commission_amount ?? 0) - Number(r.card_fee ?? 0);
     g.items.push({
       id: r.id,
       product_code: r.product_code,
       product_name: r.product_name,
       quantity: r.quantity,
       supply_amount: Number(r.supply_amount),
-      commission_amount: Number(r.commission_amount ?? 0),
+      commission_amount: net,
     });
     g.item_count += 1;
     g.total_supply += Number(r.supply_amount);
-    g.total_commission += Number(r.commission_amount ?? 0);
+    g.total_commission += net;
   }
   const pendingGroups: PendingGroup[] = Array.from(map.values()).sort((a, b) => {
     if (a.closing_date !== b.closing_date)
@@ -105,7 +107,7 @@ export default async function SettlementsPage({
   const { data: history } = await supabase
     .from("settlements")
     .select(
-      "id, settlement_month, rep_id, total_supply_amount, total_commission, sales_count, finalized_at, profiles:rep_id ( name )",
+      "id, settlement_month, rep_id, total_supply_amount, total_commission, total_card_fee, sales_count, finalized_at, profiles:rep_id ( name )",
     )
     .order("settlement_month", { ascending: false })
     .order("finalized_at", { ascending: false });
@@ -117,6 +119,7 @@ export default async function SettlementsPage({
     rep_name: (r.profiles as { name?: string } | null)?.name ?? "(미상)",
     total_supply: Number(r.total_supply_amount),
     total_commission: Number(r.total_commission),
+    total_card_fee: Number(r.total_card_fee ?? 0),
     sales_count: r.sales_count,
     finalized_at: r.finalized_at,
   }));

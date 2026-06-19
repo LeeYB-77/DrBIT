@@ -47,7 +47,7 @@ export default async function SettlementDetailPage({
       `
       id, closing_date, customer, customer_code,
       product_code, product_name, quantity, unit_price, supply_amount,
-      vat, total_amount,
+      vat, total_amount, payment_method, card_fee,
       cost_per_unit, cost_amount, profit_amount,
       commission_rate_snapshot, commission_amount
     `,
@@ -69,12 +69,18 @@ export default async function SettlementDetailPage({
     supply: Number(s.supply_amount),
     vat: Number(s.vat),
     total: Number(s.total_amount),
+    payment_method: (s.payment_method ?? "cash") as "cash" | "card",
+    card_fee: Number(s.card_fee ?? 0),
     cost_per_unit: Number(s.cost_per_unit ?? 0),
     cost_amount: Number(s.cost_amount ?? 0),
     profit: Number(s.profit_amount ?? s.supply_amount),
     rate: Number(s.commission_rate_snapshot ?? 0),
     commission: Number(s.commission_amount ?? 0),
   }));
+
+  // 카드수수료 합계 및 정산수수료(순액) = 수수료 합계 − 카드수수료 합계
+  const totalCardFee = items.reduce((a, i) => a + i.card_fee, 0);
+  const netCommission = Number(settlement.total_commission) - totalCardFee;
 
   // 거래(고객+마감일자) 단위 그룹핑
   type Group = {
@@ -136,16 +142,14 @@ export default async function SettlementDetailPage({
       {/* 요약 + 다운로드 */}
       <div className="rounded-lg border bg-white p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-5">
             <Stat label="매출 건수" value={`${items.length}건`} />
             <Stat label="공급가 합계" value={formatKRW(settlement.total_supply_amount)} />
+            <Stat label="수수료 합계" value={formatKRW(settlement.total_commission)} />
+            <Stat label="카드수수료" value={formatKRW(totalCardFee)} />
             <Stat
-              label="수익 합계"
-              value={formatKRW(items.reduce((a, i) => a + i.profit, 0))}
-            />
-            <Stat
-              label="수수료 합계"
-              value={formatKRW(settlement.total_commission)}
+              label="정산수수료"
+              value={formatKRW(netCommission)}
               tone="blue"
             />
           </div>
@@ -173,10 +177,11 @@ export default async function SettlementDetailPage({
                 <th className="px-2 py-2">품명</th>
                 <th className="px-2 py-2 text-right">수량</th>
                 <th className="px-2 py-2 text-right">공급가</th>
-                <th className="px-2 py-2 text-right">원가</th>
-                <th className="px-2 py-2 text-right">수익</th>
-                <th className="px-2 py-2 text-right">수수료율</th>
+                <th className="px-2 py-2 text-right">부가세</th>
                 <th className="px-2 py-2 text-right">수수료</th>
+                <th className="px-2 py-2 text-center">결제</th>
+                <th className="px-2 py-2 text-right">카드수수료</th>
+                <th className="px-2 py-2 text-right">정산수수료</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -193,14 +198,17 @@ export default async function SettlementDetailPage({
                   {formatKRW(Number(settlement.total_supply_amount))}
                 </td>
                 <td className="px-2 py-2 text-right text-gray-600">
-                  {formatKRW(items.reduce((a, i) => a + i.cost_amount, 0))}
+                  {formatKRW(items.reduce((a, i) => a + i.vat, 0))}
                 </td>
                 <td className="px-2 py-2 text-right">
-                  {formatKRW(items.reduce((a, i) => a + i.profit, 0))}
+                  {formatKRW(Number(settlement.total_commission))}
                 </td>
                 <td></td>
+                <td className="px-2 py-2 text-right text-gray-600">
+                  {totalCardFee > 0 ? `-${formatKRW(totalCardFee)}` : "-"}
+                </td>
                 <td className="px-2 py-2 text-right text-blue-700">
-                  {formatKRW(Number(settlement.total_commission))}
+                  {formatKRW(netCommission)}
                 </td>
               </tr>
             </tfoot>
@@ -247,14 +255,25 @@ function GroupBlock({
           <td className="px-2 py-1 text-right">{i.quantity}</td>
           <td className="px-2 py-1 text-right">{formatKRW(i.supply)}</td>
           <td className="px-2 py-1 text-right text-gray-500">
-            {i.cost_amount > 0 ? formatKRW(i.cost_amount) : "-"}
+            {formatKRW(i.vat)}
           </td>
-          <td className="px-2 py-1 text-right">{formatKRW(i.profit)}</td>
+          <td className="px-2 py-1 text-right">{formatKRW(i.commission)}</td>
+          <td className="px-2 py-1 text-center">
+            {i.payment_method === "card" ? (
+              <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] text-purple-700">
+                카드
+              </span>
+            ) : (
+              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
+                현금
+              </span>
+            )}
+          </td>
           <td className="px-2 py-1 text-right text-gray-500">
-            {(i.rate * 100).toFixed(2)}%
+            {i.card_fee > 0 ? `-${formatKRW(i.card_fee)}` : "-"}
           </td>
           <td className="px-2 py-1 text-right font-medium text-blue-700">
-            {formatKRW(i.commission)}
+            {formatKRW(i.commission - i.card_fee)}
           </td>
         </tr>
       ))}

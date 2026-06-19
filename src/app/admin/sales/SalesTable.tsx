@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { formatKRW } from "@/lib/fmt";
-import { bulkToggleCollected } from "./actions";
+import { bulkToggleCollected, type PaymentMethod } from "./actions";
 
 export type SaleRow = {
   id: string;
@@ -20,6 +20,7 @@ export type SaleRow = {
   rep_matched: boolean;
   is_collected: boolean;
   collected_at: string | null;
+  payment_method: PaymentMethod;
   settlement_month: string | null;
   commission_amount: number | null;
 };
@@ -38,6 +39,7 @@ export type SaleGroup = {
   total_commission: number;
   items: SaleRow[];
   is_collected: "all" | "partial" | "none";
+  payment_method: PaymentMethod | "mixed" | null;
   settlement_month: string | "partial" | null;
 };
 
@@ -81,22 +83,23 @@ export function SalesTable({ groups }: { groups: SaleGroup[] }) {
     setExpanded(next);
   }
 
-  function toggleGroupCollected(group: SaleGroup) {
-    // 한 번이라도 미수금 행이 있으면 → 전체 수금완료로
-    // 모두 수금완료면 → 전체 수금취소
-    const target = group.is_collected !== "all";
+  function setGroupCollected(
+    group: SaleGroup,
+    collected: boolean,
+    method: PaymentMethod = "cash",
+  ) {
     const ids = group.items
       .filter((i) => !i.settlement_month) // 정산된 행은 제외
       .map((i) => i.id);
     if (ids.length === 0) return;
     setError(null);
     startTransition(async () => {
-      const r = await bulkToggleCollected(ids, target);
+      const r = await bulkToggleCollected(ids, collected, method);
       if (!r.ok) setError(r.error);
     });
   }
 
-  function bulkSet(target: boolean) {
+  function bulkSet(collected: boolean, method: PaymentMethod = "cash") {
     const selectedGroups = groups.filter((g) => selected.has(g.key));
     const ids = selectedGroups
       .flatMap((g) => g.items)
@@ -105,7 +108,7 @@ export function SalesTable({ groups }: { groups: SaleGroup[] }) {
     if (ids.length === 0) return;
     setError(null);
     startTransition(async () => {
-      const r = await bulkToggleCollected(ids, target);
+      const r = await bulkToggleCollected(ids, collected, method);
       if (!r.ok) setError(r.error);
       else setSelected(new Set());
     });
@@ -117,11 +120,18 @@ export function SalesTable({ groups }: { groups: SaleGroup[] }) {
         <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2 text-sm">
           <span className="font-medium">{selected.size}건 선택</span>
           <button
-            onClick={() => bulkSet(true)}
+            onClick={() => bulkSet(true, "cash")}
             disabled={pending}
             className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
           >
-            수금완료 표시
+            현금 수금
+          </button>
+          <button
+            onClick={() => bulkSet(true, "card")}
+            disabled={pending}
+            className="rounded-md bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+          >
+            카드 수금
           </button>
           <button
             onClick={() => bulkSet(false)}
@@ -158,7 +168,7 @@ export function SalesTable({ groups }: { groups: SaleGroup[] }) {
                 />
               </th>
               <th className="px-2 py-2 w-6"></th>
-              <th className="px-2 py-2 w-20">수금</th>
+              <th className="px-2 py-2 w-24">수금/결제</th>
               <th className="px-2 py-2">담당자</th>
               <th className="px-2 py-2">고객</th>
               <th className="px-2 py-2">마감일자</th>
@@ -171,7 +181,6 @@ export function SalesTable({ groups }: { groups: SaleGroup[] }) {
           </thead>
           <tbody className="divide-y">
             {groups.map((g) => {
-              const settled = g.settlement_month !== null;
               const fullySettled =
                 g.settlement_month !== null && g.settlement_month !== "partial";
               const isSel = selected.has(g.key);
@@ -180,14 +189,13 @@ export function SalesTable({ groups }: { groups: SaleGroup[] }) {
                 <GroupRows
                   key={g.key}
                   group={g}
-                  settled={settled}
                   fullySettled={fullySettled}
                   isSelected={isSel}
                   isExpanded={isExp}
                   pending={pending}
                   onToggleSelect={() => toggleSelectGroup(g.key, fullySettled)}
                   onToggleExpand={() => toggleExpand(g.key)}
-                  onToggleCollected={() => toggleGroupCollected(g)}
+                  onSetCollected={(c, m) => setGroupCollected(g, c, m)}
                 />
               );
             })}
@@ -200,31 +208,32 @@ export function SalesTable({ groups }: { groups: SaleGroup[] }) {
 
 function GroupRows({
   group: g,
-  settled,
   fullySettled,
   isSelected,
   isExpanded,
   pending,
   onToggleSelect,
   onToggleExpand,
-  onToggleCollected,
+  onSetCollected,
 }: {
   group: SaleGroup;
-  settled: boolean;
   fullySettled: boolean;
   isSelected: boolean;
   isExpanded: boolean;
   pending: boolean;
   onToggleSelect: () => void;
   onToggleExpand: () => void;
-  onToggleCollected: () => void;
+  onSetCollected: (collected: boolean, method?: PaymentMethod) => void;
 }) {
-  const collectedBadge =
-    g.is_collected === "all"
-      ? { label: "완료", cls: "bg-green-100 text-green-700" }
+  // 현재 수금/결제 상태를 select value 로 환산
+  const collectedValue =
+    g.is_collected === "none"
+      ? "none"
       : g.is_collected === "partial"
-        ? { label: "부분", cls: "bg-amber-100 text-amber-700" }
-        : { label: "미수금", cls: "bg-gray-100 text-gray-500" };
+        ? "partial"
+        : g.payment_method === "mixed"
+          ? "mixed"
+          : (g.payment_method ?? "cash");
 
   return (
     <>
@@ -255,21 +264,42 @@ function GroupRows({
           ) : null}
         </td>
         <td className="px-2 py-1">
-          <button
-            type="button"
-            onClick={onToggleCollected}
+          <select
+            value={collectedValue}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "none") onSetCollected(false);
+              else if (v === "cash") onSetCollected(true, "cash");
+              else if (v === "card") onSetCollected(true, "card");
+            }}
             disabled={fullySettled || pending}
-            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${collectedBadge.cls} ${
-              fullySettled ? "opacity-50" : "hover:opacity-80"
-            }`}
             title={
-              fullySettled
-                ? "정산 확정된 거래는 수금 변경 불가"
-                : "클릭하여 토글"
+              fullySettled ? "정산 확정된 거래는 수금 변경 불가" : "수금/결제수단 선택"
             }
+            className={`rounded-md border px-1.5 py-0.5 text-[11px] ${
+              g.is_collected === "all"
+                ? g.payment_method === "card"
+                  ? "border-purple-300 bg-purple-50 text-purple-700"
+                  : "border-green-300 bg-green-50 text-green-700"
+                : g.is_collected === "partial"
+                  ? "border-amber-300 bg-amber-50 text-amber-700"
+                  : "border-gray-200 bg-gray-50 text-gray-500"
+            } ${fullySettled ? "opacity-50" : ""}`}
           >
-            {collectedBadge.label}
-          </button>
+            <option value="none">미수금</option>
+            <option value="cash">현금 수금</option>
+            <option value="card">카드 수금</option>
+            {g.is_collected === "partial" && (
+              <option value="partial" disabled>
+                부분 수금
+              </option>
+            )}
+            {g.payment_method === "mixed" && (
+              <option value="mixed" disabled>
+                혼합 결제
+              </option>
+            )}
+          </select>
         </td>
         <td className="px-2 py-1">
           {g.rep_matched ? (

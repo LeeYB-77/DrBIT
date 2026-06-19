@@ -9,7 +9,7 @@ export default async function ReportsPage() {
   const { data: settlements, error } = await supabase
     .from("settlements")
     .select(
-      "settlement_month, rep_id, total_supply_amount, total_commission, sales_count, finalized_at, profiles:rep_id ( name )",
+      "settlement_month, rep_id, total_supply_amount, total_commission, total_card_fee, sales_count, finalized_at, profiles:rep_id ( name )",
     )
     .order("settlement_month", { ascending: false });
 
@@ -55,7 +55,8 @@ export default async function ReportsPage() {
     const repName =
       (s.profiles as { name?: string } | null)?.name ?? "(미상)";
     const supply = Number(s.total_supply_amount);
-    const commission = Number(s.total_commission);
+    // 정산수수료(순액) = 수수료 − 카드수수료
+    const commission = Number(s.total_commission) - Number(s.total_card_fee ?? 0);
     g.rows.push({
       rep_id: s.rep_id!,
       rep_name: repName,
@@ -100,7 +101,7 @@ export default async function ReportsPage() {
                 </h2>
                 <div className="text-xs text-gray-500">
                   {g.rows.length}명 · {g.totalCount}건 · 공급가{" "}
-                  {formatKRW(g.totalSupply)} · 수수료{" "}
+                  {formatKRW(g.totalSupply)} · 정산수수료{" "}
                   <b className="text-blue-700">{formatKRW(g.totalCommission)}</b>
                 </div>
               </div>
@@ -111,7 +112,7 @@ export default async function ReportsPage() {
                       <th className="px-3 py-2">담당자</th>
                       <th className="px-3 py-2 text-right w-24">건수</th>
                       <th className="px-3 py-2 text-right w-36">공급가 합</th>
-                      <th className="px-3 py-2 text-right w-36">수수료</th>
+                      <th className="px-3 py-2 text-right w-36">정산수수료</th>
                       <th className="px-3 py-2 text-right w-24">비율</th>
                     </tr>
                   </thead>

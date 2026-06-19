@@ -110,10 +110,10 @@ export async function processSettlement(args: {
   // 4. 정산월의 settlements 행 전체 재계산
   await recalcSettlementsForMonth(args.settlementMonth, profile.id, adminCli);
 
-  // 5. 담당자별 결과 집계
+  // 5. 담당자별 결과 집계 (정산수수료 = 수수료 - 카드수수료)
   const { data: results } = await supabase
     .from("sales")
-    .select("rep_id, commission_amount, profiles:rep_id ( name )")
+    .select("rep_id, commission_amount, card_fee, profiles:rep_id ( name )")
     .in("id", args.saleIds);
 
   const byRep = new Map<string, { name: string; commission: number }>();
@@ -121,7 +121,8 @@ export async function processSettlement(args: {
     if (!r.rep_id) continue;
     const name = (r.profiles as { name?: string } | null)?.name ?? "(미상)";
     const prev = byRep.get(r.rep_id) ?? { name, commission: 0 };
-    prev.commission += Number(r.commission_amount ?? 0);
+    prev.commission +=
+      Number(r.commission_amount ?? 0) - Number(r.card_fee ?? 0);
     byRep.set(r.rep_id, prev);
   }
 
@@ -248,19 +249,21 @@ async function recalcSettlementsForMonth(
   // 해당 월의 모든 정산된 sales 집계
   const { data: rows } = await adminCli
     .from("sales")
-    .select("rep_id, supply_amount, commission_amount")
+    .select("rep_id, supply_amount, commission_amount, card_fee")
     .eq("settlement_month", settlementMonth);
 
   // rep_id 별 집계 (rep_id null 제외)
   const byRep = new Map<
     string,
-    { supply: number; commission: number; count: number }
+    { supply: number; commission: number; cardFee: number; count: number }
   >();
   for (const r of rows ?? []) {
     if (!r.rep_id) continue;
-    const v = byRep.get(r.rep_id) ?? { supply: 0, commission: 0, count: 0 };
+    const v =
+      byRep.get(r.rep_id) ?? { supply: 0, commission: 0, cardFee: 0, count: 0 };
     v.supply += Number(r.supply_amount ?? 0);
     v.commission += Number(r.commission_amount ?? 0);
+    v.cardFee += Number(r.card_fee ?? 0);
     v.count += 1;
     byRep.set(r.rep_id, v);
   }
@@ -276,6 +279,7 @@ async function recalcSettlementsForMonth(
     rep_id,
     total_supply_amount: v.supply,
     total_commission: v.commission,
+    total_card_fee: v.cardFee,
     sales_count: v.count,
     finalized_by: finalizedBy,
   }));
