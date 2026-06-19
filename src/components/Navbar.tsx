@@ -11,7 +11,10 @@ export function Navbar({ profile }: { profile: Profile }) {
         { href: "/admin/reports", label: "리포트" },
         { href: "/admin/settings", label: "설정" },
       ]
-    : [{ href: "/me/settlements", label: "내 정산" }];
+    : [
+        { href: "/me/settlements", label: "내 정산" },
+        { href: "/me/account", label: "비밀번호 변경" },
+      ];
 
   return (
     <header className="border-b bg-white">

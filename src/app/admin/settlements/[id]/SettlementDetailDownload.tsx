@@ -32,6 +32,8 @@ const HEADERS = [
   "품번",
   "품명",
   "수량",
+  "단위당 원가",
+  "원가 합계",
   "단가",
   "공급가",
   "부가세",
@@ -42,10 +44,10 @@ const HEADERS = [
   "정산수수료",
 ] as const;
 
-const COL_WIDTHS = [12, 24, 10, 16, 22, 6, 12, 12, 12, 14, 12, 8, 12, 12];
+const COL_WIDTHS = [12, 24, 10, 16, 22, 6, 12, 12, 12, 12, 12, 14, 12, 8, 12, 12];
 
-// 천 단위 콤마를 적용할 숫자 컬럼 인덱스 (수량 + 금액들). 결제(11)는 제외.
-const NUMERIC_COLS = new Set([5, 6, 7, 8, 9, 10, 12, 13]);
+// 천 단위 콤마를 적용할 숫자 컬럼 인덱스 (수량 + 금액들). 결제(13)는 제외.
+const NUMERIC_COLS = new Set([5, 6, 7, 8, 9, 10, 11, 12, 14, 15]);
 const NUM_FMT = "#,##0";
 
 // ── 스타일 정의 ─────────────────────────────────────────────
@@ -110,6 +112,8 @@ export function SettlementDetailDownload({
       i.product_code,
       i.product_name,
       i.quantity,
+      i.cost_per_unit,
+      i.cost_amount,
       i.unit_price,
       i.supply,
       i.vat,
@@ -123,6 +127,7 @@ export function SettlementDetailDownload({
     const totals = items.reduce(
       (acc, c) => ({
         qty: acc.qty + c.quantity,
+        costAmount: acc.costAmount + c.cost_amount,
         supply: acc.supply + c.supply,
         vat: acc.vat + c.vat,
         total: acc.total + c.total,
@@ -130,10 +135,10 @@ export function SettlementDetailDownload({
         cardFee: acc.cardFee + c.card_fee,
         net: acc.net + (c.commission - c.card_fee),
       }),
-      { qty: 0, supply: 0, vat: 0, total: 0, comm: 0, cardFee: 0, net: 0 },
+      { qty: 0, costAmount: 0, supply: 0, vat: 0, total: 0, comm: 0, cardFee: 0, net: 0 },
     );
 
-    // 합계행: 단가/결제는 빈칸
+    // 합계행: 단위당 원가/단가/결제는 빈칸
     const totalRow = [
       "",
       "합계",
@@ -141,6 +146,8 @@ export function SettlementDetailDownload({
       "",
       "",
       totals.qty,
+      "",
+      totals.costAmount,
       "",
       totals.supply,
       totals.vat,
